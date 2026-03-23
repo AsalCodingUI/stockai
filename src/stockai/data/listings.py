@@ -48,6 +48,57 @@ IDX_BROWSER_HEADERS = {
 UNIVERSE_CACHE_FILE = Path.home() / ".stockai" / "idx_universe.json"
 CACHE_TTL_DAYS = 7
 
+# Seed list 500+ ticker kandidat IDX untuk yfinance bulk validate.
+KNOWN_IDX_PREFIXES = [
+    "BBCA", "BBRI", "BMRI", "BBNI", "BBTN", "BRIS", "BNLI", "PNBN", "BJTM", "BJBR",
+    "BNGA", "BDMN", "NISP", "MAYA", "BSIM", "MCOR", "AGRO", "ARTO", "BANK", "BBYB",
+    "DNAR", "HANA", "IBOS", "INAS", "INPC", "NAGA", "PNBS", "SDRA", "SEAH", "NOBU",
+    "BVIC", "BCIC", "BMAS", "BGTG", "BINA", "BMSI", "BNBA", "BNII", "BPFI", "BSWD",
+    "ADRO", "PTBA", "ITMG", "HRUM", "BUMI", "DEWA", "KKGI", "MYOH", "ADMR", "DOID",
+    "INDY", "BREN", "ESSA", "AKRA", "PGAS", "MEDC", "ENRG", "BIPI", "ELSA", "RUIS",
+    "PTRO", "ARTI", "GTBO", "SMMT", "PSAB", "FIRE", "MBAP", "GEMS", "TOBA", "MCOL",
+    "PKPK", "KPIG", "BORN", "BRAU", "BSSR", "GTBO", "HITS", "ARII", "CNKO", "SMRU",
+    "ANTM", "INCO", "TINS", "MDKA", "AMMN", "NCKL", "BRMS", "PSAB", "SMBR", "ZINC",
+    "CTTH", "DKFT", "KING", "MITI", "SMCB", "PURE", "IFSH", "IPPE", "MITI", "PBTH",
+    "UNVR", "ICBP", "INDF", "MYOR", "ULTJ", "ROTI", "CLEO", "DLTA", "MLBI", "BUDI",
+    "ALTO", "CAMP", "CEKA", "GOOD", "HOKI", "KEJU", "STTP", "SKBM", "SKLT", "SMAR",
+    "AISA", "TBLA", "PANI", "HMSP", "GGRM", "WIIM", "RMBA", "ITIC", "DMND", "FOOD",
+    "PSGO", "KINO", "LMPI", "SIGER", "ADES", "DAVO", "DKFT", "ERNZ", "FAST", "HKMU",
+    "TLKM", "EXCL", "ISAT", "LINK", "FREN", "MORA", "SUPR", "TOWR", "TBIG", "BALI",
+    "DMMX", "EMTK", "MNCN", "SCMA", "MEJA", "MTDL", "MLPT", "GOTO", "BUKA", "GLVA",
+    "EDGE", "EKAD", "EPMT", "KIOS", "LUCK", "MCAS", "MTFN", "PGEO", "RELI", "RUNS",
+    "BSDE", "CTRA", "PWON", "SMRA", "LPKR", "DART", "DMAS", "JRPT", "MDLN", "MTLA",
+    "PLIN", "PPRO", "RBMS", "RODA", "TARA", "ASRI", "BKSL", "CITY", "DUTI", "GPRA",
+    "KIJA", "LAND", "LPCK", "APLN", "PANI", "POLL", "BIKA", "BIPP", "COWL", "DILD",
+    "ELTY", "FMII", "GMTD", "GWSA", "MKPI", "MMLP", "MTSM", "NIRO", "POLI", "PUDP",
+    "RDTX", "REAL", "RISE", "ROCK", "SCBD", "SMDM", "TRIN",
+    "KLBF", "SIDO", "MERK", "KAEF", "PEHA", "DVLA", "TSPC", "PYFA", "INAF", "SCPI",
+    "MIKA", "HEAL", "PRAY", "SILO", "SAME", "SHID", "PRIM", "CARE", "IRRA", "OMED",
+    "JSMR", "WSKT", "PTPP", "WIKA", "ADHI", "NRCA", "TOTL", "ACST", "DGIK", "IDPR",
+    "PBSA", "WTON", "BTON", "SMBR", "SMGR", "INTP", "PORT", "META", "CMNP", "IPCM",
+    "LRNA", "NELY", "SAFE", "SDMU", "GIAA", "ASSA", "BIRD", "BLTA", "CMPP", "HATM",
+    "MBSS", "SMDR", "TMAS", "WINS", "TPMA", "BPTR", "CASS", "INDX", "ISSP", "KJEN",
+    "ASII", "AUTO", "IMAS", "INDS", "LPIN", "PRAS", "SMSM", "BOLT", "GDYR", "GJTL",
+    "MASA", "NIPS", "PCAR", "RICY", "SSTM", "VOKS", "PBRX", "CNTX", "BELL", "BATA",
+    "BIMA", "CFIN", "DYAN", "ESTI", "MYTX", "PAFI", "SRIL", "POLY", "HDTX", "UNIT",
+    "MAPI", "RALS", "LPPF", "MIDI", "MPPA", "ACES", "CSAP", "DAYA", "ECII", "ERAA",
+    "GLOB", "HOME", "HERO", "KOIN", "KPAS", "MEDS", "SONA", "SKYB", "RANC", "TELE",
+    "AALI", "LSIP", "SSMS", "BWPT", "DSFI", "GZCO", "JAWA", "MAGP", "PALM", "SGRO",
+    "SIMP", "ANJT", "TAPG", "TBLA", "MGRO", "BTEK", "DNSG", "FAPA", "IIKP", "KDSI",
+    "LSIP", "NSSS", "SMAR", "SPOT", "UNSP", "WAPO",
+    "ADMF", "BFIN", "CFIN", "MFIN", "TIFA", "VRNA", "WOMF", "HDFA", "IMJS", "INCF",
+    "PADI", "PEGE", "SMMA", "ABDA", "AHAP", "AMAG", "ASBI", "ASDM", "ASEI", "ASMI",
+    "ASRM", "LPGI", "MREI", "PNIN", "TUGU", "SRTG", "BCAP", "DEFI", "FUJI", "GSMF",
+    "JMAS", "MAMI", "OCAP", "PANS", "PEGE", "POOL", "VINS", "YULE",
+    "FILM", "JTPE", "KREN", "MSIN", "MSKY", "TMPO", "VIVA", "BMTR", "FORU", "MNCN",
+    "ASSA", "BIRD", "GIAA", "TMAS", "WINS", "CMPP", "BLTA", "MBSS", "SMDR", "SDMU",
+    "NELY", "HATM", "LRNA", "PORT", "SAFE", "IPCM", "CASS", "BPTR", "TPMA", "INDX",
+    "AGII", "AKPI", "ALKA", "ALMI", "AMFG", "ARNA", "BTON", "CTBN", "DPNS", "EKAD",
+    "FASW", "IGAR", "IGBR", "IMPC", "IPOL", "ISSP", "JECC", "JPRS", "KDSI", "KIAS",
+    "KRAH", "LION", "LMSH", "MAIN", "MARK", "MDKI", "MLIA", "MOLI", "MREI", "MYOR",
+    "NIKL", "PICO", "PRAS", "SRSN", "TBMS", "TOTO", "TRST", "UNIC", "VOKS", "YPAS",
+]
+
 
 # IDX30 stocks (most liquid 30 stocks)
 IDX30_STOCKS = [
@@ -415,29 +466,107 @@ class DynamicStockUniverse:
         logger.info("Yahoo screener: %d stocks fetched", len(stocks))
         return stocks
 
-    async def _fetch_via_yfinance_indices(self) -> list[dict[str, Any]]:
-        """Last network fallback before static: lightweight yfinance seed."""
+    async def _fetch_via_yfinance_validate(self) -> list[dict[str, Any]]:
+        """Bulk-validate IDX candidates via yfinance.download()."""
+        import pandas as pd
+        import yfinance as yf
         from concurrent.futures import ThreadPoolExecutor
 
-        def _sync_enrich() -> list[dict[str, Any]]:
-            _ = __import__("yfinance")
+        all_candidates: list[str] = list(
+            dict.fromkeys([s["symbol"] for s in ALL_IDX_STOCKS] + KNOWN_IDX_PREFIXES)
+        )
+        yf_tickers = [f"{sym}.JK" for sym in all_candidates]
+        static_map = {s["symbol"]: s for s in ALL_IDX_STOCKS}
+
+        def _sync_validate() -> list[dict[str, Any]]:
             stocks: list[dict[str, Any]] = []
             seen: set[str] = set()
-            for row in ALL_IDX_STOCKS:
-                symbol = str(row.get("symbol", "")).upper().strip()
-                name = str(row.get("name", "")).strip()
-                sector = str(row.get("sector", "Unknown")).strip() or "Unknown"
-                if symbol and name and symbol not in seen:
-                    seen.add(symbol)
-                    stocks.append({"symbol": symbol, "name": name, "sector": sector})
+            batch_size = 100
+
+            for i in range(0, len(yf_tickers), batch_size):
+                batch = yf_tickers[i: i + batch_size]
+                try:
+                    df = yf.download(
+                        tickers=" ".join(batch),
+                        period="5d",
+                        interval="1d",
+                        group_by="ticker",
+                        auto_adjust=True,
+                        progress=False,
+                        threads=True,
+                    )
+                    if df is None or df.empty:
+                        continue
+
+                    if isinstance(df.columns, pd.MultiIndex):
+                        level0 = {str(v) for v in df.columns.get_level_values(0)}
+                        level1 = {str(v) for v in df.columns.get_level_values(1)}
+
+                        # yfinance can return either:
+                        # 1) level0=ticker, level1=field (group_by=ticker)
+                        # 2) level0=field,  level1=ticker
+                        if "Close" in level0:
+                            tickers = [t for t in level1 if str(t).endswith(".JK")]
+                            for ticker in tickers:
+                                try:
+                                    close = df["Close"][ticker]
+                                    if close.dropna().empty:
+                                        continue
+                                except Exception:
+                                    continue
+                                sym = str(ticker).replace(".JK", "").upper()
+                                if sym and sym not in seen:
+                                    seen.add(sym)
+                                    static = static_map.get(sym, {})
+                                    stocks.append({
+                                        "symbol": sym,
+                                        "name": static.get("name", sym),
+                                        "sector": static.get("sector", "Unknown"),
+                                    })
+                        else:
+                            tickers = [t for t in level0 if str(t).endswith(".JK")]
+                            for ticker in tickers:
+                                try:
+                                    close = df[ticker]["Close"]
+                                    if close.dropna().empty:
+                                        continue
+                                except Exception:
+                                    continue
+                                sym = str(ticker).replace(".JK", "").upper()
+                                if sym and sym not in seen:
+                                    seen.add(sym)
+                                    static = static_map.get(sym, {})
+                                    stocks.append({
+                                        "symbol": sym,
+                                        "name": static.get("name", sym),
+                                        "sector": static.get("sector", "Unknown"),
+                                    })
+                    else:
+                        if len(batch) == 1:
+                            sym = batch[0].replace(".JK", "").upper()
+                            close = df.get("Close")
+                            if close is not None and not close.dropna().empty and sym not in seen:
+                                seen.add(sym)
+                                static = static_map.get(sym, {})
+                                stocks.append({
+                                    "symbol": sym,
+                                    "name": static.get("name", sym),
+                                    "sector": static.get("sector", "Unknown"),
+                                })
+                except Exception as exc:
+                    logger.warning("yfinance batch %d-%d failed: %s", i, i + batch_size, exc)
+                    continue
+
             return stocks
 
         loop = asyncio.get_running_loop()
         with ThreadPoolExecutor(max_workers=1) as pool:
-            stocks = await loop.run_in_executor(pool, _sync_enrich)
+            stocks = await loop.run_in_executor(pool, _sync_validate)
 
-        if not stocks:
-            raise ValueError("yfinance fallback returned empty")
+        if len(stocks) < 50:
+            raise ValueError(f"yfinance bulk validate: only {len(stocks)} valid tickers")
+
+        logger.info("yfinance bulk validate: %d stocks confirmed", len(stocks))
         return stocks
 
     def _cache_valid(self) -> bool:
@@ -488,7 +617,7 @@ class DynamicStockUniverse:
             return {"exists": True, "valid": False, "error": "corrupt cache"}
 
     async def get_all_stocks(self) -> list[dict[str, Any]]:
-        """Return universe using cache -> IDX -> Yahoo -> yfinance -> static chain."""
+        """Return universe: cache -> IDX -> Yahoo -> yfinance validate -> static."""
         if self._cache_valid():
             try:
                 cached = self._load_cache()
@@ -498,51 +627,65 @@ class DynamicStockUniverse:
             except Exception as exc:
                 logger.warning("Cache read failed: %s", exc)
 
-        try:
-            stocks = await self._fetch_idx_official()
-            self._save_cache(stocks, source="idx_official")
-            logger.info("Universe from IDX API: %d stocks", len(stocks))
-            return stocks
-        except Exception as exc:
-            logger.warning("IDX API failed: %s", exc)
-
-        try:
-            stocks = await self._fetch_via_yahoo()
-            self._save_cache(stocks, source="yahoo_screener")
-            logger.info("Universe from Yahoo: %d stocks", len(stocks))
-            return stocks
-        except Exception as exc:
-            logger.warning("Yahoo screener failed: %s", exc)
-
-        try:
-            stocks = await self._fetch_via_yfinance_indices()
-            self._save_cache(stocks, source="yfinance_indices")
-            logger.info("Universe from yfinance: %d stocks", len(stocks))
-            return stocks
-        except Exception as exc:
-            logger.warning("yfinance failed: %s", exc)
+        for source_name, fetch_fn, source_key in [
+            ("IDX API", self._fetch_idx_official, "idx_official"),
+            ("Yahoo Screener", self._fetch_via_yahoo, "yahoo_screener"),
+            ("yfinance Validate", self._fetch_via_yfinance_validate, "yfinance_validate"),
+        ]:
+            try:
+                stocks = await fetch_fn()
+                if stocks:
+                    self._save_cache(stocks, source=source_key)
+                    logger.info("Universe from %s: %d stocks", source_name, len(stocks))
+                    return stocks
+            except Exception as exc:
+                logger.warning("%s failed: %s", source_name, exc)
 
         logger.warning("All sources failed, using static: %d stocks", len(ALL_IDX_STOCKS))
         return ALL_IDX_STOCKS.copy()
 
     async def force_refresh(self) -> dict[str, Any]:
-        """Force refresh stock universe by bypassing cache."""
+        """Force refresh universe: clear cache then try all sources in order."""
         if UNIVERSE_CACHE_FILE.exists():
             UNIVERSE_CACHE_FILE.unlink()
 
-        for source_name, fetch_fn, source_key in [
+        sources = [
             ("IDX Official API", self._fetch_idx_official, "idx_official"),
             ("Yahoo Finance Screener", self._fetch_via_yahoo, "yahoo_screener"),
-            ("yfinance Indices", self._fetch_via_yfinance_indices, "yfinance_indices"),
-        ]:
+            ("yfinance Bulk Validate", self._fetch_via_yfinance_validate, "yfinance_validate"),
+        ]
+
+        for source_name, fetch_fn, source_key in sources:
             try:
                 stocks = await fetch_fn()
+                if len(stocks) < 150:
+                    logger.warning(
+                        "%s: only %d stocks, trying next source",
+                        source_name, len(stocks),
+                    )
+                    continue
                 self._save_cache(stocks, source=source_key)
+                logger.info("Universe from %s: %d stocks", source_name, len(stocks))
                 return {"success": True, "source": source_name, "count": len(stocks)}
             except Exception as exc:
                 logger.warning("%s failed: %s", source_name, exc)
 
+        try:
+            stocks = await self._fetch_via_yfinance_validate()
+            self._save_cache(stocks, source="yfinance_validate_no_threshold")
+            return {
+                "success": True,
+                "source": "yfinance Bulk Validate (no threshold)",
+                "count": len(stocks),
+            }
+        except Exception as exc:
+            logger.error("yfinance validate also failed: %s", exc)
+
         return {"success": False, "source": "static_fallback", "count": len(ALL_IDX_STOCKS)}
+
+    async def _fetch_via_yfinance_indices(self) -> list[dict[str, Any]]:
+        """Backward-compat alias, use bulk validate implementation."""
+        return await self._fetch_via_yfinance_validate()
 
     def get_all_stocks_sync(self) -> list[dict[str, Any]]:
         """Sync wrapper for non-async contexts (cache first, fallback static)."""
