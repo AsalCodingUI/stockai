@@ -139,7 +139,7 @@ cython_debug/
 *~
 
 # Project specific
-data/
+/data/
 *.log
 paper_portfolio*.json
 reports/
