@@ -1748,6 +1748,73 @@ def history(
         console.print(f"  Avg Volume: {avg_vol:,.0f}")
 
 
+@app.command("backtest")
+def cli_backtest(
+    symbol: str = typer.Argument(..., help="Stock symbol, e.g. BBCA"),
+    strategy: str = typer.Option("ema_cross", "--strategy", "-s", help="ema_cross | macd_momentum | gate_system"),
+    period: str = typer.Option("1y", "--period", "-p", help="6mo | 1y | 2y | 3y | 5y"),
+    sl: float = typer.Option(7.0, "--sl", help="Stop loss %"),
+    tp: float = typer.Option(15.0, "--tp", help="Take profit %"),
+) -> None:
+    """Run backtest for a stock."""
+    from stockai.core.backtest import BacktestEngine, STRATEGY_MAP
+    from stockai.data.sources.yahoo import YahooFinanceSource
+
+    clean_symbol = symbol.upper().strip()
+    if strategy not in STRATEGY_MAP:
+        typer.echo(f"❌ Unknown strategy: {strategy}")
+        typer.echo(f"   Valid: {', '.join(STRATEGY_MAP.keys())}")
+        raise typer.Exit(1)
+
+    typer.echo(f"\n⏳ Running backtest: {clean_symbol} | {strategy} | {period}")
+
+    yahoo = YahooFinanceSource()
+    df = yahoo.get_price_history(clean_symbol, period=period)
+    if df.empty or len(df) < 60:
+        typer.echo(f"❌ Data tidak cukup untuk {clean_symbol}")
+        raise typer.Exit(1)
+
+    df_engine = df.rename(
+        columns={
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "volume": "Volume",
+        }
+    )
+    if "date" in df_engine.columns:
+        df_engine = df_engine.set_index("date")
+
+    engine = BacktestEngine(
+        symbol=clean_symbol,
+        df=df_engine,
+        strategy=strategy,
+        stop_loss_pct=sl / 100,
+        take_profit_pct=tp / 100,
+    )
+    result = engine.run()
+
+    typer.echo(f"\n{'─' * 55}")
+    typer.echo(f"  {clean_symbol} | {strategy} | {result.period}")
+    typer.echo(f"{'─' * 55}")
+    typer.echo(f"  Total Return   : {result.total_return_pct:+.2f}%")
+    typer.echo(f"  IHSG Benchmark : {result.benchmark_return_pct:+.2f}%")
+    typer.echo(f"  Alpha          : {result.alpha:+.2f}%")
+    typer.echo(f"  Sharpe Ratio   : {result.sharpe_ratio:.2f}")
+    typer.echo(f"  Max Drawdown   : {result.max_drawdown_pct:.2f}%")
+    typer.echo(f"  Profit Factor  : {result.profit_factor:.2f}")
+    typer.echo(f"{'─' * 55}")
+    typer.echo(f"  Total Trades   : {result.total_trades}")
+    typer.echo(f"  Win Rate       : {result.win_rate:.1f}% ({result.win_trades}W / {result.loss_trades}L)")
+    typer.echo(f"  Avg Win        : +{result.avg_win_pct:.2f}%")
+    typer.echo(f"  Avg Loss       : {result.avg_loss_pct:.2f}%")
+    typer.echo(f"  Avg Hold       : {result.avg_hold_days:.0f} days")
+    typer.echo(f"  Best Trade     : {result.best_trade_pct:+.2f}%")
+    typer.echo(f"  Worst Trade    : {result.worst_trade_pct:.2f}%")
+    typer.echo(f"{'─' * 55}\n")
+
+
 # Portfolio subcommand group
 portfolio_app = typer.Typer(help="Manage your stock portfolio")
 app.add_typer(portfolio_app, name="portfolio")
