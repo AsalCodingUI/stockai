@@ -167,3 +167,7 @@ credentials.json
 
 # Git worktrees
 .worktrees/
+
+# BMAD generated data
+_bmad/bmm/data/
+_bmad/bmm/workflows/3-solutioning/create-architecture/data/
