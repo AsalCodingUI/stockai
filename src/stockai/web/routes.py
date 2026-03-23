@@ -838,6 +838,8 @@ async def analyze_coach_stock_api(
     tujuan: str = Query("swing", description="scalp | swing | invest"),
 ) -> dict[str, Any]:
     from stockai.data.sources.yahoo import YahooFinanceSource
+    from stockai.core.sentiment.stockbit import StockbitSentiment
+    from stockai.core.sentiment.news import NewsAggregator
 
     clean = symbol.upper().strip()
     yahoo = YahooFinanceSource()
@@ -846,7 +848,63 @@ async def analyze_coach_stock_api(
         raise HTTPException(status_code=404, detail=f"Data tidak cukup untuk {clean}")
 
     try:
-        decision = await analyze_entry(symbol=clean, df=df, modal=modal, tujuan=tujuan)
+        monitor = get_monitor()
+        market_ctx = getattr(monitor, "_last_market_context", None) or {}
+        if not market_ctx:
+            try:
+                market_ctx = await monitor._get_market_context(yahoo)
+            except Exception:
+                market_ctx = {
+                    "ihsg_trend": "UNKNOWN",
+                    "market_breadth": "MIXED",
+                    "advance_ratio": 0.5,
+                    "leading_sector": "UNKNOWN",
+                    "lagging_sector": "UNKNOWN",
+                }
+
+        sentiment_signal = await asyncio.to_thread(StockbitSentiment().analyze, clean)
+        sentiment_label = str(sentiment_signal.get("sentiment", "NEUTRAL")).upper()
+        sentiment_raw = float(sentiment_signal.get("score", 0))
+        sentiment_score = max(0.0, min(100.0, 50.0 + sentiment_raw * 5.0))
+        news_bias = (
+            "POSITIVE" if sentiment_label == "BULLISH"
+            else "NEGATIVE" if sentiment_label == "BEARISH"
+            else "NEUTRAL"
+        )
+        try:
+            articles = await asyncio.to_thread(
+                lambda: NewsAggregator().fetch_google_news(clean, max_articles=8)
+            )
+            pos_kw = ("naik", "optimis", "bullish", "outperform", "accumulate", "buy")
+            neg_kw = ("turun", "melemah", "bearish", "downgrade", "sell", "risiko")
+            score = 0
+            for article in articles:
+                title = str(getattr(article, "title", "")).lower()
+                if any(k in title for k in pos_kw):
+                    score += 1
+                if any(k in title for k in neg_kw):
+                    score -= 1
+            if score > 1:
+                news_bias = "POSITIVE"
+            elif score < -1:
+                news_bias = "NEGATIVE"
+        except Exception:
+            pass
+
+        decision = await analyze_entry(
+            symbol=clean,
+            df=df,
+            modal=modal,
+            tujuan=tujuan,
+            ihsg_trend=str(market_ctx.get("ihsg_trend", "UNKNOWN")),
+            sentiment_label=sentiment_label,
+            sentiment_score=sentiment_score,
+            news_bias=news_bias,
+            market_breadth=str(market_ctx.get("market_breadth", "MIXED")),
+            advance_ratio=float(market_ctx.get("advance_ratio", 0.5)),
+            leading_sector=str(market_ctx.get("leading_sector", "UNKNOWN")),
+            lagging_sector=str(market_ctx.get("lagging_sector", "UNKNOWN")),
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -860,6 +918,30 @@ async def trigger_coach_scan_api() -> dict[str, Any]:
     monitor = get_monitor()
     asyncio.create_task(monitor._scan_all())
     return {"message": "Scan dimulai di background"}
+
+
+@api_router.get("/coach/monitor/status")
+async def get_coach_monitor_status_api() -> dict[str, Any]:
+    monitor = get_monitor()
+    return _to_native(monitor.get_status())
+
+
+@api_router.get("/coach/monitor/logs")
+async def get_coach_monitor_logs_api(
+    limit: int = Query(100, ge=1, le=500),
+) -> dict[str, Any]:
+    monitor = get_monitor()
+    decisions = monitor.get_recent_decisions(limit=limit)
+    alerts = monitor.get_recent_alerts(limit=limit)
+    return _to_native(
+        {
+            "limit": limit,
+            "decisions": decisions,
+            "alerts": alerts,
+            "decision_count": len(decisions),
+            "alert_count": len(alerts),
+        }
+    )
 
 
 @api_router.post("/coach/test-telegram")

@@ -43,9 +43,17 @@ class TechnicalSnapshot:
     dist_resistance_pct: float = 0.0
     candle_pattern: str = "NONE"
     stock_character: str = "NORMAL"
+    sentiment_label: str = "NEUTRAL"
+    sentiment_score: float = 50.0
+    news_bias: str = "NEUTRAL"
+    market_breadth: str = "MIXED"
+    advance_ratio: float = 0.5
+    leading_sector: str = "UNKNOWN"
+    lagging_sector: str = "UNKNOWN"
     gates_pass: list[str] = field(default_factory=list)
     gates_fail: list[str] = field(default_factory=list)
     gate_score: int = 0
+    gate_total: int = 8
     ihsg_trend: str = "UNKNOWN"
     timestamp: str = ""
 
@@ -220,6 +228,7 @@ def _compute_snapshot(symbol: str, df: pd.DataFrame) -> TechnicalSnapshot:
     g5 = vol_ratio >= 1.2
     g6 = bb_position != "UPPER"
     g7 = stoch_k >= stoch_d
+    g8 = True
 
     gates_pass: list[str] = []
     gates_fail: list[str] = []
@@ -231,6 +240,7 @@ def _compute_snapshot(symbol: str, df: pd.DataFrame) -> TechnicalSnapshot:
         "Volume spike >1.2x": g5,
         "Bollinger tidak overbought": g6,
         "Stoch RSI bullish cross": g7,
+        "Sentiment tidak negatif": g8,
     }
     for name, passed in gate_map.items():
         (gates_pass if passed else gates_fail).append(name)
@@ -266,6 +276,7 @@ def _compute_snapshot(symbol: str, df: pd.DataFrame) -> TechnicalSnapshot:
         gates_pass=gates_pass,
         gates_fail=gates_fail,
         gate_score=len(gates_pass),
+        gate_total=len(gate_map),
         timestamp=datetime.now().isoformat(),
     )
 
@@ -316,8 +327,15 @@ def _build_prompt(snap: TechnicalSnapshot, modal: int, tujuan: str) -> str:
 
 ### Konteks Market
 - IHSG trend: {snap.ihsg_trend}
+- Market breadth: {snap.market_breadth} (advance ratio: {snap.advance_ratio:.2f})
+- Sector rotation: leader {snap.leading_sector} | laggard {snap.lagging_sector}
 
-### Gate System ({snap.gate_score}/7 gates terbuka)
+### Sentiment Context
+- Sentiment label: {snap.sentiment_label}
+- Sentiment score: {snap.sentiment_score:.1f}/100
+- News bias: {snap.news_bias}
+
+### Gate System ({snap.gate_score}/{snap.gate_total} gates terbuka)
 Gate PASS:
 {gates_pass_str}
 
@@ -348,8 +366,8 @@ Berikan analisis dalam format JSON yang KETAT berikut (tidak ada teks di luar JS
 }}
 
 Aturan:
-- action ENTRY_NOW: gate_score >= 4 dan trend UPTREND dan RSI < 70
-- action AVOID: trend DOWNTREND dan gate_score <= 2, atau RSI > 75
+- action ENTRY_NOW: gate_score >= 5 dan trend UPTREND dan RSI < 70
+- action AVOID: trend DOWNTREND dan gate_score <= 3, atau RSI > 75
 - action WAIT: kondisi lainnya
 - entry_low/high: range harga masuk yang realistis (±1-2% dari harga sekarang)
 - stop_loss: support terdekat atau -7% dari entry (pilih yang lebih dekat)
@@ -402,10 +420,10 @@ async def _call_gemini(prompt: str) -> dict[str, Any]:
 
 def _rule_based_fallback(snap: TechnicalSnapshot, modal: int) -> dict[str, Any]:
     """Fallback if LLM fails."""
-    if snap.gate_score >= 4 and snap.trend == "UPTREND" and snap.rsi < 70:
+    if snap.gate_score >= 5 and snap.trend == "UPTREND" and snap.rsi < 70:
         action = "ENTRY_NOW"
         confidence = snap.gate_score * 15 + 25
-    elif snap.trend == "DOWNTREND" and snap.gate_score <= 2:
+    elif snap.trend == "DOWNTREND" and snap.gate_score <= 3:
         action = "AVOID"
         confidence = 70
     else:
@@ -442,10 +460,49 @@ async def analyze_entry(
     modal: int = 5_000_000,
     tujuan: str = "swing",
     ihsg_trend: str = "UNKNOWN",
+    sentiment_label: str = "NEUTRAL",
+    sentiment_score: float = 50.0,
+    news_bias: str = "NEUTRAL",
+    market_breadth: str = "MIXED",
+    advance_ratio: float = 0.5,
+    leading_sector: str = "UNKNOWN",
+    lagging_sector: str = "UNKNOWN",
 ) -> CoachDecision:
     """Analyze symbol and produce coach decision."""
     snap = _compute_snapshot(symbol, df)
     snap.ihsg_trend = ihsg_trend
+    snap.sentiment_label = str(sentiment_label or "NEUTRAL").upper()
+    try:
+        snap.sentiment_score = float(sentiment_score)
+    except Exception:
+        snap.sentiment_score = 50.0
+    snap.news_bias = str(news_bias or "NEUTRAL").upper()
+    snap.market_breadth = str(market_breadth or "MIXED").upper()
+    try:
+        snap.advance_ratio = float(advance_ratio)
+    except Exception:
+        snap.advance_ratio = 0.5
+    snap.leading_sector = str(leading_sector or "UNKNOWN")
+    snap.lagging_sector = str(lagging_sector or "UNKNOWN")
+
+    sentiment_gate_pass = (
+        snap.sentiment_label in {"POSITIVE", "BULLISH", "NEUTRAL"}
+        and snap.sentiment_score >= 45
+        and snap.news_bias != "NEGATIVE"
+    )
+    gate_name = "Sentiment tidak negatif"
+    if sentiment_gate_pass:
+        if gate_name in snap.gates_fail:
+            snap.gates_fail.remove(gate_name)
+        if gate_name not in snap.gates_pass:
+            snap.gates_pass.append(gate_name)
+    else:
+        if gate_name in snap.gates_pass:
+            snap.gates_pass.remove(gate_name)
+        if gate_name not in snap.gates_fail:
+            snap.gates_fail.append(gate_name)
+    snap.gate_score = len(snap.gates_pass)
+
     prompt = _build_prompt(snap, modal, tujuan)
 
     try:

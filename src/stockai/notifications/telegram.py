@@ -80,13 +80,16 @@ def _format_alert(d: "CoachDecision") -> str:
 
     if d.snapshot:
         snap = d.snapshot
+        gate_total = getattr(snap, "gate_total", 8)
         lines += [
             "",
             "📊 *Teknikal*",
             f"• Harga: Rp {snap.price:,.0f} ({snap.change_pct:+.2f}%)".replace(",", "."),
-            f"• RSI: {snap.rsi} | Gate: {snap.gate_score}/5",
+            f"• RSI: {snap.rsi} | Gate: {snap.gate_score}/{gate_total}",
             f"• Trend: {snap.trend}",
             f"• Volume: {snap.vol_ratio:.1f}x rata-rata",
+            f"• Breadth: {getattr(snap, 'market_breadth', 'MIXED')}",
+            f"• Sentiment: {getattr(snap, 'sentiment_label', 'NEUTRAL')}",
         ]
 
     lines += [
