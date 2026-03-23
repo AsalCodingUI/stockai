@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # Data Source API Keys
     firecrawl_api_key: str = Field(default="", alias="FIRECRAWL_API_KEY")
     tavily_api_key: str = Field(default="", alias="TAVILY_API_KEY")
+    twelve_data_api_key: str = Field(default="", alias="TWELVE_DATA_API_KEY")
 
     # Model settings
     model: str = Field(default="gemini-3-flash-preview", description="Default LLM model")
@@ -81,6 +82,11 @@ class Settings(BaseSettings):
     def has_firecrawl_api(self) -> bool:
         """Check if Firecrawl API key is configured."""
         return bool(self.firecrawl_api_key)
+
+    @property
+    def has_twelve_data_api(self) -> bool:
+        """Check if Twelve Data API key is configured."""
+        return bool(self.twelve_data_api_key)
 
 
 @lru_cache

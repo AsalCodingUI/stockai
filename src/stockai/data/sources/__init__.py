@@ -1,6 +1,11 @@
-"""Data Sources Package."""
+"""Data sources for StockAI."""
 
-from stockai.data.sources.yahoo import YahooFinanceSource
-from stockai.data.sources.idx import IDXIndexSource, get_idx30, get_lq45
+from stockai.data.sources.yahoo import YahooFinanceSource, get_yahoo_source
+from stockai.data.sources.twelve import TwelveDataSource, get_twelve_source
 
-__all__ = ["YahooFinanceSource", "IDXIndexSource", "get_idx30", "get_lq45"]
+__all__ = [
+    "YahooFinanceSource",
+    "get_yahoo_source",
+    "TwelveDataSource",
+    "get_twelve_source",
+]
