@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts - StockAI{% endblock %}
+
+{% block content %}
+<section class="card">
+    <div class="flex items-center justify-between">
+        <div class="section-title">🔔 Alerts</div>
+        <button id="clear-alerts" class="btn-filter">Clear All</button>
+    </div>
+    <div id="alerts-list" class="mt-4 grid gap-2"></div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+async function loadAlerts() {
+    const root = document.getElementById('alerts-list');
+    root.innerHTML = '';
+    const data = await window.appFetch('/api/alerts');
+    const rows = data.alerts || [];
+    if (!rows.length) {
+        root.innerHTML = '<div class="text-muted">No active alerts.</div>';
+        return;
+    }
+    rows.forEach((alert) => {
+        const div = document.createElement('div');
+        div.className = 'alert-row';
+        div.innerHTML = `<div class="font-medium">${alert.level}</div><div>${alert.title}</div><div class="text-muted">${window.timeAgo(alert.timestamp)}</div>`;
+        root.appendChild(div);
+    });
+}
+
+document.getElementById('clear-alerts').addEventListener('click', async () => {
+    await window.appFetch('/api/alerts', { method: 'DELETE' });
+    loadAlerts();
+});
+
+loadAlerts();
+</script>
+{% endblock %}

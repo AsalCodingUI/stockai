@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Live Scan - StockAI{% endblock %}
+
+{% block content %}
+<section class="card">
+    <div class="flex items-center justify-between">
+        <div class="section-title">🤖 Live Scan</div>
+        <button id="btn-run-scan" class="btn-primary">▶ RUN</button>
+    </div>
+    <div class="mt-3">
+        <div class="progress-track">
+            <div id="scan-progress-bar" class="progress-bar" style="width: 0%;"></div>
+        </div>
+        <div class="text-muted mt-1" id="scan-progress-text">0/0</div>
+    </div>
+</section>
+
+<section class="card mt-4">
+    <div class="flex flex-wrap gap-2">
+        <button class="btn-filter active" data-filter="ALL">ALL</button>
+        <button class="btn-filter" data-filter="READY">READY</button>
+        <button class="btn-filter" data-filter="WATCH">WATCH</button>
+        <button class="btn-filter" data-filter="REJECTED">REJECTED</button>
+    </div>
+    <div id="scan-results" class="mt-4 grid gap-2"></div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/scan.js"></script>
+{% endblock %}

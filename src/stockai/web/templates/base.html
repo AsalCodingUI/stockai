@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}StockAI{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "bg-primary": "#0a0a0f",
+                        "bg-card": "#111118",
+                        "neon-green": "#00ff88",
+                        "neon-cyan": "#00d4ff",
+                    }
+                }
+            }
+        };
+    </script>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0a0a0f;
+            color: #e2e8f0;
+            font-family: "JetBrains Mono", monospace;
+            min-height: 100vh;
+        }
+    </style>
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body x-data="{ now: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) }" class="app-body">
+    <div class="app-layout">
+        <aside class="sidebar">
+            <a href="/" class="brand">⬡ STOCKAI</a>
+            <nav class="side-nav">
+                <a href="/" class="side-link">🏠 Dashboard</a>
+                <a href="/scan" class="side-link">🔍 Live Scan</a>
+                <a href="/portfolio" class="side-link">💼 Portfolio</a>
+                <a href="/alerts" class="side-link">🔔 Alerts</a>
+                <a href="/api/docs" target="_blank" class="side-link">📚 API Docs</a>
+            </nav>
+        </aside>
+        <main class="main-panel">
+            <header class="topbar">
+                <div class="topbar-title">{{ title | default("StockAI Dashboard") }}</div>
+                <div class="topbar-status">
+                    <span id="next-scan-indicator" class="text-muted">⏱ Next scan: -</span>
+                    <span class="live-dot"></span>
+                    <span>LIVE</span>
+                    <span x-text="now"></span>
+                </div>
+            </header>
+            <section class="content-shell">
+                {% block content %}{% endblock %}
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', path='js/app.js') }}"></script>
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

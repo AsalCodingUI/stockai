@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}StockAI Dashboard{% endblock %}
+
+{% block content %}
+<section class="grid gap-4 md:grid-cols-4">
+    <article class="stat-card">
+        <div class="stat-label">READY</div>
+        <div class="stat-value" id="kpi-ready">0</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-label">WATCH</div>
+        <div class="stat-value" id="kpi-watch">0</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-label">SCANNED</div>
+        <div class="stat-value" id="kpi-scanned">0</div>
+    </article>
+    <article class="stat-card">
+        <div class="stat-label">LAST SCAN</div>
+        <div class="stat-value text-base" id="kpi-last-scan">-</div>
+    </article>
+</section>
+
+<section class="card mt-4">
+    <div class="section-title">IHSG Mini Chart (7 Hari)</div>
+    <div id="ihsg-chart" class="chart-box"></div>
+</section>
+
+<section class="card mt-4">
+    <div class="section-title">Top Signals</div>
+    <div id="signal-cards" class="grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

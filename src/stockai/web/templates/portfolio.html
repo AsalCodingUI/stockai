@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio - StockAI{% endblock %}
+
+{% block content %}
+<section class="card">
+    <div class="flex items-center justify-between">
+        <div class="section-title">💼 Portfolio</div>
+        <div class="text-muted">Modal: <span id="portfolio-modal">-</span></div>
+    </div>
+    <div class="mt-3 grid gap-3 md:grid-cols-2">
+        <div>
+            <div class="text-muted">Total Value</div>
+            <div class="text-2xl font-semibold" id="portfolio-value">-</div>
+            <div id="portfolio-return" class="mt-1"></div>
+        </div>
+        <div>
+            <canvas id="portfolio-chart" height="120"></canvas>
+        </div>
+    </div>
+</section>
+
+<section class="card mt-4">
+    <div class="section-title">Positions</div>
+    <div id="positions-list" class="mt-3 grid gap-2"></div>
+</section>
+
+<section class="card mt-4">
+    <div class="section-title">Risk Metrics</div>
+    <div id="risk-metrics" class="mt-3 grid gap-2 md:grid-cols-2"></div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/portfolio.js"></script>
+{% endblock %}
