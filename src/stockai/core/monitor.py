@@ -1,4 +1,7 @@
-"""Background monitor - smart scan watchlist setiap 8 menit saat market buka."""
+"""Background monitor - smart scan watchlist setiap 8 menit saat market buka.
+
+Data source: Yahoo Finance interval 2m (delay ~2-3 menit, gratis, support IDX).
+"""
 
 from __future__ import annotations
 
@@ -30,7 +33,7 @@ class WatchlistMonitor:
         if not self._running:
             self._running = True
             self._task = asyncio.create_task(self._loop())
-            logger.info("WatchlistMonitor started (interval: 8 menit)")
+            logger.info("WatchlistMonitor started - Yahoo 2m interval, scan tiap 8 menit")
 
     def stop(self) -> None:
         self._running = False
@@ -49,24 +52,10 @@ class WatchlistMonitor:
                 logger.error("Monitor loop error: %s", exc)
             await asyncio.sleep(INTERVAL_SEC)
 
-    def _get_source(self):
-        """Pilih Twelve Data kalau ada key, fallback Yahoo."""
-        from stockai.config import get_settings
-
-        settings = get_settings()
-        if settings.has_twelve_data_api:
-            from stockai.data.sources.twelve import get_twelve_source
-
-            logger.debug("Source: Twelve Data (~1 min delay)")
-            return get_twelve_source()
-        from stockai.data.sources.yahoo import YahooFinanceSource
-
-        logger.debug("Source: Yahoo Finance (~15 min delay)")
-        return YahooFinanceSource()
-
     async def _scan_all(self) -> None:
         from stockai.core.coach import analyze_entry
         from stockai.core.watchlist import get_watchlist
+        from stockai.data.sources.yahoo import YahooFinanceSource
         from stockai.notifications.telegram import send_coach_alert
 
         watchlist = get_watchlist()
@@ -74,33 +63,16 @@ class WatchlistMonitor:
         if not stocks:
             return
 
-        source = self._get_source()
+        yahoo = YahooFinanceSource()
         symbols = [s["symbol"] for s in stocks]
-        logger.info("Monitor: scanning %d stocks", len(symbols))
+        loop = asyncio.get_running_loop()
+
+        logger.info("Monitor: scanning %d stocks (Yahoo 2m)", len(symbols))
 
         try:
-            loop = asyncio.get_running_loop()
-            batch_prices = await loop.run_in_executor(None, lambda: source.get_multiple_prices(symbols))
+            batch = await loop.run_in_executor(None, lambda: yahoo.get_multiple_prices(symbols))
         except Exception as exc:
-            logger.warning("Batch price check failed, skip scan: %s", exc)
-            return
-
-        # Graceful fallback: jika Twelve tidak bisa ambil data (quota/plan restriction),
-        # otomatis fallback ke Yahoo agar monitor tetap jalan.
-        if not batch_prices:
-            try:
-                from stockai.data.sources.twelve import TwelveDataSource
-                if isinstance(source, TwelveDataSource):
-                    from stockai.data.sources.yahoo import YahooFinanceSource
-                    logger.warning("Twelve returned empty batch, fallback to Yahoo source")
-                    source = YahooFinanceSource()
-                    batch_prices = await loop.run_in_executor(None, lambda: source.get_multiple_prices(symbols))
-            except Exception as exc:
-                logger.warning("Fallback to Yahoo failed: %s", exc)
-                batch_prices = {}
-
-        if not batch_prices:
-            logger.warning("No batch prices available from all sources, skip scan")
+            logger.warning("Batch price check gagal: %s", exc)
             return
 
         ihsg_trend = await _get_ihsg_trend()
@@ -111,47 +83,59 @@ class WatchlistMonitor:
             tujuan = stock.get("tujuan", "swing")
 
             try:
-                current = batch_prices.get(symbol)
-                if not current:
-                    logger.debug("No price data for %s, skip", symbol)
-                    continue
-
-                current_price = float(current.get("price", 0))
+                current = batch.get(symbol, {})
+                current_price = float(current.get("price") or 0)
                 if current_price <= 0:
+                    logger.debug("%s: no price, skip", symbol)
                     continue
 
-                last_price = self._last_prices.get(symbol, 0)
-                if last_price > 0:
-                    move_pct = abs(current_price / last_price - 1) * 100
-                    if move_pct < 0.5:
-                        logger.debug("%s move %.2f%% < 0.5%%, skip full analysis", symbol, move_pct)
+                last = self._last_prices.get(symbol, 0)
+                if last > 0:
+                    move = abs(current_price / last - 1) * 100
+                    if move < 0.5:
+                        logger.debug("%s: move %.2f%% < 0.5%%, skip", symbol, move)
                         continue
 
                 self._last_prices[symbol] = current_price
 
-                df = await loop.run_in_executor(None, lambda s=symbol: source.get_price_history(s, period="3mo"))
-                if df.empty or len(df) < 30:
+                df_daily = await loop.run_in_executor(
+                    None,
+                    lambda s=symbol: yahoo.get_price_history(s, period="3mo", interval="1d"),
+                )
+                if df_daily.empty or len(df_daily) < 30:
+                    logger.debug("%s: data tidak cukup", symbol)
                     continue
+
+                if current_price > 0 and not df_daily.empty:
+                    df_daily = df_daily.copy()
+                    df_daily.loc[df_daily.index[-1], "close"] = current_price
 
                 decision = await analyze_entry(
                     symbol=symbol,
-                    df=df,
+                    df=df_daily,
                     modal=modal,
                     tujuan=tujuan,
                     ihsg_trend=ihsg_trend,
                 )
+
                 watchlist.update_last_signal(symbol, decision.action)
+                logger.info(
+                    "%s -> %s (confidence %d%%, IHSG: %s)",
+                    symbol, decision.action, decision.confidence, ihsg_trend
+                )
 
                 if decision.action == "ENTRY_NOW" and decision.confidence >= 60:
                     await send_coach_alert(decision)
-                    logger.info("🔔 Alert: %s ENTRY_NOW (confidence %d%%)", symbol, decision.confidence)
+                    logger.info("🔔 Alert sent: %s", symbol)
+
             except Exception as exc:
-                logger.warning("Scan %s failed: %s", symbol, exc)
+                logger.warning("Scan %s error: %s", symbol, exc)
 
             await asyncio.sleep(1.5)
 
 
 async def _get_ihsg_trend() -> str:
+    """Ambil trend IHSG hari ini via Yahoo."""
     try:
         import yfinance as yf
         from concurrent.futures import ThreadPoolExecutor
