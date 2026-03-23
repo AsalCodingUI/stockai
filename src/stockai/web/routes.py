@@ -22,7 +22,7 @@ from stockai.core.predictor import EnsemblePredictor, PredictionAccuracyTracker
 from stockai.data.cache import async_cached
 from stockai.data.cache import memory_cache_get, memory_cache_set
 from stockai.data.database import init_database
-from stockai.data.listings import ALL_IDX_STOCKS
+from stockai.data.listings import ALL_IDX_STOCKS, get_stock_database
 from stockai.data.sources.yahoo import YahooFinanceSource
 from stockai.data.sources.idx import IDXIndexSource
 from stockai.scoring.analyzer import analyze_stock, GateConfig
@@ -118,6 +118,82 @@ def _to_native(value: Any) -> Any:
     return value
 
 
+def _safe_support_distance_pct(analysis: Any) -> float | None:
+    """Return distance_to_support_pct safely (supports None at every level)."""
+    support_resistance = getattr(analysis, "support_resistance", None)
+    if support_resistance is None:
+        return None
+    raw = getattr(support_resistance, "distance_to_support_pct", None)
+    try:
+        return float(raw) if raw is not None else None
+    except Exception:
+        return None
+
+
+def _build_trade_plan_fallback(
+    analysis: Any,
+    current_price: float | None,
+) -> dict[str, Any]:
+    """Build trade plan from analyzer output, fallback to SR/risk-derived values."""
+    tp = getattr(analysis, "trade_plan", None)
+    price = float(current_price or 0.0)
+
+    entry_low = _price_or_none(getattr(tp, "entry_low", None)) if tp else None
+    entry_high = _price_or_none(getattr(tp, "entry_high", None)) if tp else None
+    sl = _price_or_none(getattr(tp, "stop_loss", None)) if tp else None
+    tp1 = _price_or_none(getattr(tp, "take_profit_1", None)) if tp else None
+    tp2 = _price_or_none(getattr(tp, "take_profit_2", None)) if tp else None
+    tp3 = _price_or_none(getattr(tp, "take_profit_3", None)) if tp else None
+    rr = _price_or_none(getattr(tp, "risk_reward_ratio", None)) if tp else None
+
+    if price > 0:
+        sr = getattr(analysis, "support_resistance", None)
+        support = _price_or_none(getattr(sr, "nearest_support", None)) if sr else None
+        resistances = getattr(sr, "resistances", None) if sr else None
+        resistance = _price_or_none(resistances[0]) if isinstance(resistances, list) and resistances else None
+        if resistance is None:
+            resistance = _price_or_none(getattr(sr, "nearest_resistance", None)) if sr else None
+
+        if entry_low is None:
+            entry_low = support or round(price * 0.99, 0)
+        if entry_high is None:
+            entry_high = round(price * 1.005, 0)
+
+        if sl is None and entry_low is not None:
+            if support and support > 0:
+                sl = round(min(entry_low * 0.97, support * 0.995), 0)
+            else:
+                sl = round(entry_low * 0.97, 0)
+
+        if entry_low is not None:
+            risk = (entry_low - sl) if (sl is not None) else (price * 0.03)
+            if risk <= 0:
+                risk = price * 0.03
+            if tp1 is None:
+                tp1 = round(entry_low + risk * 1.5, 0)
+            if tp2 is None:
+                tp2 = round(entry_low + risk * 2.5, 0)
+            if tp3 is None:
+                fallback_tp3 = entry_low + risk * 3.5
+                tp3 = round(resistance if resistance and resistance > (tp2 or 0) else fallback_tp3, 0)
+
+            if rr is None and sl is not None and entry_low is not None:
+                actual_risk = entry_low - sl
+                actual_reward = (tp1 or entry_low) - entry_low
+                rr = round(actual_reward / actual_risk, 2) if actual_risk > 0 else None
+
+    return {
+        "entry_low": entry_low,
+        "entry_high": entry_high,
+        "stop_loss": sl,
+        "tp1": tp1,
+        "tp2": tp2,
+        "tp3": tp3,
+        "rr": rr,
+        "is_fallback": tp is None,
+    }
+
+
 def _get_index_symbols(index_name: str) -> list[str]:
     idx = IDXIndexSource()
     upper = index_name.upper()
@@ -195,6 +271,26 @@ def _scan_status(gates_passed: int) -> str:
     return "REJECTED"
 
 
+def _rank_search_results(rows: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
+    """Rank stock search results by exactness before fuzzy score."""
+    q_upper = query.upper().strip()
+    q_lower = query.lower().strip()
+
+    def rank_key(row: dict[str, Any]) -> tuple[int, float]:
+        symbol = str(row.get("symbol", "")).upper()
+        name = str(row.get("name", "")).lower()
+        score = float(row.get("score", 0.0) or 0.0)
+        if symbol == q_upper:
+            return (0, -score)
+        if symbol.startswith(q_upper):
+            return (1, -score)
+        if q_upper in symbol or q_lower in name:
+            return (2, -score)
+        return (3, -score)
+
+    return sorted(rows, key=rank_key)
+
+
 def _is_scan_cache_fresh() -> bool:
     last_scan_at = _WEB_RUNTIME.get("last_scan_at")
     if not isinstance(last_scan_at, datetime):
@@ -235,14 +331,15 @@ def _build_signal_event(symbol: str) -> dict[str, Any]:
         unusual_volume_signal=volume_signal,
         sentiment_signal=sentiment_signal,
     )
+    support_distance_pct = _safe_support_distance_pct(analysis)
+
     forecast = probability.forecast(
         symbol,
         {
             "volume_ratio": volume_signal.get("volume_ratio", 0),
             "adx": analysis.adx.get("adx", 0),
             "near_support": (
-                analysis.support_resistance.distance_to_support_pct <= 10
-                if analysis.support_resistance else False
+                support_distance_pct <= 10 if support_distance_pct is not None else False
             ),
             "sentiment_label": sentiment_signal.get("sentiment", "NEUTRAL"),
             "volume_classification": volume_signal.get("classification", "NORMAL"),
@@ -546,6 +643,35 @@ async def get_scheduler_status() -> dict:
         return {"running": False, "jobs": [], "error": str(exc)}
 
 
+@api_router.get("/search")
+async def api_search_stocks(
+    q: str = Query("", description="Stock query by symbol/name"),
+) -> dict:
+    """Global stock search endpoint with autocomplete-friendly response."""
+    query = (q or "").strip()
+    if len(query) < 2:
+        return {"results": [], "total": 0, "query": query}
+
+    db = get_stock_database()
+    matches = db.search(query, limit=20)
+    matches = _rank_search_results(matches, query)
+    results = []
+    for row in matches[:10]:
+        symbol = str(row.get("symbol", "")).upper().strip()
+        if not symbol:
+            continue
+        results.append(
+            {
+                "symbol": symbol,
+                "name": str(row.get("name", "")).strip(),
+                "sector": str(row.get("sector", "Unknown")).strip() or "Unknown",
+                "url": f"/stock/{symbol}",
+            }
+        )
+
+    return {"results": results, "total": len(results), "query": query}
+
+
 @api_router.get("/scan/last")
 async def get_last_scan() -> dict:
     if not _is_scan_cache_fresh():
@@ -633,14 +759,15 @@ async def get_stock_full(symbol: str) -> dict:
         sentiment_signal=sentiment_signal,
     )
 
+    support_distance_pct = _safe_support_distance_pct(analysis)
+
     forecast = probability.forecast(
         clean_symbol,
         {
             "volume_ratio": volume_signal.get("volume_ratio", 0),
             "adx": analysis.adx.get("adx", 0),
             "near_support": (
-                analysis.support_resistance.distance_to_support_pct <= 10
-                if analysis.support_resistance else False
+                support_distance_pct <= 10 if support_distance_pct is not None else False
             ),
             "sentiment_label": sentiment_signal.get("sentiment", "NEUTRAL"),
             "volume_classification": volume_signal.get("classification", "NORMAL"),
@@ -667,7 +794,7 @@ async def get_stock_full(symbol: str) -> dict:
         {"name": "Overall", "passed": analysis.composite_score >= 55, "value": round(analysis.composite_score, 1), "threshold": 55},
         {"name": "Technical", "passed": ((analysis.momentum_score + (100 - analysis.volatility_score)) / 2) >= 45, "value": round((analysis.momentum_score + (100 - analysis.volatility_score)) / 2, 1), "threshold": 45},
         {"name": "SmartMoney", "passed": analysis.smart_money.score >= 1.5, "value": round(analysis.smart_money.score, 2), "threshold": 1.5},
-        {"name": "Support", "passed": analysis.support_resistance.distance_to_support_pct <= 10 if analysis.support_resistance.distance_to_support_pct is not None else False, "value": round(float(analysis.support_resistance.distance_to_support_pct or 0), 2), "threshold": 10},
+        {"name": "Support", "passed": support_distance_pct <= 10 if support_distance_pct is not None else False, "value": round(float(support_distance_pct or 0), 2), "threshold": 10},
         {"name": "ADX", "passed": float(analysis.adx.get("adx", 0)) >= 20, "value": round(float(analysis.adx.get("adx", 0)), 2), "threshold": 20},
         {"name": "Fundamental", "passed": ((analysis.value_score + analysis.quality_score) / 2) >= 45, "value": round((analysis.value_score + analysis.quality_score) / 2, 1), "threshold": 45},
     ]
@@ -687,15 +814,7 @@ async def get_stock_full(symbol: str) -> dict:
             "momentum_score": round(float(analysis.momentum_score), 1),
             "volatility_score": round(float(analysis.volatility_score), 1),
             "gate_status": gate_status,
-            "trade_plan": {
-                "entry_low": _price_or_none(analysis.trade_plan.entry_low) if analysis.trade_plan else None,
-                "entry_high": _price_or_none(analysis.trade_plan.entry_high) if analysis.trade_plan else None,
-                "stop_loss": _price_or_none(analysis.trade_plan.stop_loss) if analysis.trade_plan else None,
-                "tp1": _price_or_none(analysis.trade_plan.take_profit_1) if analysis.trade_plan else None,
-                "tp2": _price_or_none(analysis.trade_plan.take_profit_2) if analysis.trade_plan else None,
-                "tp3": _price_or_none(analysis.trade_plan.take_profit_3) if analysis.trade_plan else None,
-                "rr": _price_or_none(analysis.trade_plan.risk_reward_ratio) if analysis.trade_plan else None,
-            },
+            "trade_plan": _build_trade_plan_fallback(analysis, _price_or_none(analysis.current_price)),
         },
         "smart_money": flow_signal,
         "volume": volume_signal,
@@ -737,6 +856,12 @@ async def get_stock_scoring(symbol: str) -> dict:
         sentiment_signal={"sentiment": "NEUTRAL", "score": 0, "source": "stockbit"},
     )
 
+    sr = getattr(analysis, "support_resistance", None)
+    sr_resistances = getattr(sr, "resistances", None) if sr else None
+    sr_resistance = _price_or_none(sr_resistances[0]) if isinstance(sr_resistances, list) and sr_resistances else None
+    if sr_resistance is None:
+        sr_resistance = _price_or_none(getattr(sr, "nearest_resistance", None)) if sr else None
+
     payload = {
         "symbol": clean_symbol,
         "scores": {
@@ -752,18 +877,11 @@ async def get_stock_scoring(symbol: str) -> dict:
             "confidence": getattr(analysis.gates, "confidence", "REJECTED"),
             "reasons": list(getattr(analysis.gates, "rejection_reasons", [])),
         },
-        "trade_plan": {
-            "entry_low": _price_or_none(analysis.trade_plan.entry_low) if analysis.trade_plan else None,
-            "entry_high": _price_or_none(analysis.trade_plan.entry_high) if analysis.trade_plan else None,
-            "stop_loss": _price_or_none(analysis.trade_plan.stop_loss) if analysis.trade_plan else None,
-            "tp1": _price_or_none(analysis.trade_plan.take_profit_1) if analysis.trade_plan else None,
-            "tp2": _price_or_none(analysis.trade_plan.take_profit_2) if analysis.trade_plan else None,
-            "rr": _price_or_none(analysis.trade_plan.risk_reward_ratio) if analysis.trade_plan else None,
-        },
+        "trade_plan": _build_trade_plan_fallback(analysis, _price_or_none(analysis.current_price)),
         "support_resistance": {
-            "support": _price_or_none(analysis.support_resistance.nearest_support),
-            "resistance": _price_or_none((analysis.support_resistance.resistances or [None])[0]),
-            "distance_to_support_pct": _price_or_none(analysis.support_resistance.distance_to_support_pct),
+            "support": _price_or_none(getattr(sr, "nearest_support", None)) if sr else None,
+            "resistance": sr_resistance,
+            "distance_to_support_pct": _price_or_none(getattr(sr, "distance_to_support_pct", None)) if sr else None,
         },
     }
     return _to_native(payload)

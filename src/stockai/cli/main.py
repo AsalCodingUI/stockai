@@ -233,20 +233,64 @@ def universe_refresh() -> None:
 
 
 @universe_app.command("search")
-def universe_search(query: str) -> None:
-    """Cari saham di universe."""
+def universe_search(
+    query: str,
+    limit: int = typer.Option(10, "--limit", "-l", help="Max results"),
+    sector: str | None = typer.Option(None, "--sector", "-s", help="Filter by sector"),
+) -> None:
+    """Cari saham by symbol atau nama perusahaan."""
     from stockai.data.listings import get_stock_database
 
+    def _rank(rows: list[dict], q: str) -> list[dict]:
+        q_upper = q.upper().strip()
+        q_lower = q.lower().strip()
+
+        def rank_key(row: dict) -> tuple[int, float]:
+            symbol = str(row.get("symbol", "")).upper()
+            name = str(row.get("name", "")).lower()
+            score = float(row.get("score", 0.0) or 0.0)
+            if symbol == q_upper:
+                return (0, -score)
+            if symbol.startswith(q_upper):
+                return (1, -score)
+            if q_upper in symbol or q_lower in name:
+                return (2, -score)
+            return (3, -score)
+
+        return sorted(rows, key=rank_key)
+
     db = get_stock_database()
-    results = db.search(query, limit=10)
+    effective_limit = max(1, int(limit))
+    results = db.search(query, limit=effective_limit * 2)
+    results = _rank(results, query)
+
+    if sector:
+        sector_q = sector.lower().strip()
+        results = [row for row in results if sector_q in str(row.get("sector", "")).lower()]
+
+    results = results[:effective_limit]
 
     if not results:
-        typer.echo(f"❌ No results for '{query}'")
+        typer.echo(f"❌ Tidak ada hasil untuk '{query}'")
+        if sector:
+            typer.echo(f"   (filter sector: {sector})")
         return
 
-    typer.echo(f"🔍 Results for '{query}':")
+    header = f"\n🔍 Hasil pencarian: '{query}'"
+    if sector:
+        header += f" | sector: {sector}"
+    typer.echo(header)
+    typer.echo("─" * 65)
+    typer.echo(f"{'SYMBOL':<8} {'NAMA':<40} {'SECTOR'}")
+    typer.echo("─" * 65)
     for row in results:
-        typer.echo(f"   {row['symbol']:6s}  {row['name']:<45s}  {row['sector']}")
+        symbol = str(row.get("symbol", ""))
+        name = str(row.get("name", ""))
+        name_view = f"{name[:38]}.." if len(name) > 38 else name
+        sector_view = str(row.get("sector", "Unknown"))
+        typer.echo(f"{symbol:<8} {name_view:<40} {sector_view}")
+    typer.echo("─" * 65)
+    typer.echo(f"Total: {len(results)} hasil\n")
 
 
 @app.command()

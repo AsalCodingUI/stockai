@@ -50,6 +50,53 @@
         <main class="main-panel">
             <header class="topbar">
                 <div class="topbar-title">{{ title | default("StockAI Dashboard") }}</div>
+                <div class="search-container" style="position:relative;display:flex;align-items:center;">
+                    <input
+                        id="global-search"
+                        type="text"
+                        placeholder="Cari saham..."
+                        autocomplete="off"
+                        style="
+                            width: 280px;
+                            padding: 6px 80px 6px 32px;
+                            border-radius: 8px;
+                            border: 1px solid #334155;
+                            background: #1e293b;
+                            color: #f1f5f9;
+                            font-size: 13px;
+                            outline: none;
+                        "
+                    />
+                    <span style="
+                        position:absolute;
+                        left:10px;
+                        color:#475569;
+                        font-size:13px;
+                        pointer-events:none;
+                    ">🔍</span>
+                    <span
+                        id="search-shortcut-badge"
+                        class="search-kbd"
+                        style="position:absolute;right:8px;"
+                    >⌘K</span>
+                    <div
+                        id="search-dropdown"
+                        style="
+                            display: none;
+                            position: absolute;
+                            top: 36px;
+                            left: 0;
+                            width: 100%;
+                            background: #1e293b;
+                            border: 1px solid #334155;
+                            border-radius: 8px;
+                            z-index: 1000;
+                            max-height: 320px;
+                            overflow-y: auto;
+                            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+                        "
+                    ></div>
+                </div>
                 <div class="topbar-status">
                     <span id="next-scan-indicator" class="text-muted">⏱ Next scan: -</span>
                     <span class="live-dot"></span>

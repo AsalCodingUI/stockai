@@ -3,8 +3,11 @@ let mainChart = null;
 let volumeChart = null;
 let macdChart = null;
 let currentPeriod = "3mo";
+const MAIN_CHART_HEIGHT = 560;
+const SUB_CHART_HEIGHT = 140;
 window.tradePlan = null;
 let chartDataCache = null;
+let latestScores = null;
 const seriesRefs = {};
 const toggleState = {
     ema: true,
@@ -66,7 +69,7 @@ function addHistogramSeriesCompat(chart, options = {}) {
     return null;
 }
 
-function renderIndicatorSummary(summary) {
+function renderIndicatorSummary(summary, scores = null) {
     const container = document.getElementById("indicator-summary");
     if (!container || !summary) return;
 
@@ -74,6 +77,47 @@ function renderIndicatorSummary(summary) {
     const macdColor = summary.macd_signal === "BULLISH" ? "#00ff88" : "#ff3b5c";
     const emaColor = summary.ema_signal === "BULLISH" ? "#00ff88" : "#ff3b5c";
     const trendColor = summary.trend === "BULLISH" ? "#00ff88" : "#ff3b5c";
+
+    const scoreBar = (label, value, color) => {
+        const safeValue = Number.isFinite(Number(value)) ? Number(value) : 0;
+        const pct = Math.min(100, Math.max(0, safeValue));
+        return `
+            <div style="margin-bottom:8px;">
+                <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+                    <span style="font-size:11px;color:#94a3b8;">${label}</span>
+                    <span style="font-size:11px;font-weight:600;color:${color};">${pct.toFixed(0)}</span>
+                </div>
+                <div style="background:#0f172a;border-radius:4px;height:4px;">
+                    <div style="
+                        width:${pct}%;height:100%;
+                        background:${color};border-radius:4px;
+                        transition:width 0.5s;
+                    "></div>
+                </div>
+            </div>
+        `;
+    };
+
+    const scoresHtml = scores ? `
+        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #1e293b;">
+            <div style="font-size:11px;color:#64748b;margin-bottom:8px;">📊 COMPOSITE SCORES</div>
+            ${scoreBar("Value", scores.value_score, "#3b82f6")}
+            ${scoreBar("Quality", scores.quality_score, "#8b5cf6")}
+            ${scoreBar("Momentum", scores.momentum_score, "#00ff88")}
+            ${scoreBar("Stability", 100 - (Number(scores.volatility_score) || 0), "#fbbf24")}
+            <div style="
+                margin-top:8px;padding:8px;
+                background:#0f172a;border-radius:6px;
+                display:flex;justify-content:space-between;align-items:center;
+            ">
+                <span style="font-size:12px;color:#94a3b8;">Composite Score</span>
+                <span style="
+                    font-size:18px;font-weight:700;
+                    color:${Number(scores.composite_score) >= 65 ? "#00ff88" : Number(scores.composite_score) >= 50 ? "#fbbf24" : "#ff3b5c"};
+                ">${Number(scores.composite_score || 0).toFixed(1)}</span>
+            </div>
+        </div>
+    ` : "";
 
     container.innerHTML = `
         <div class="indicator-item">
@@ -108,6 +152,7 @@ function renderIndicatorSummary(summary) {
             <span class="label">Trend</span>
             <span style="color:${trendColor};font-weight:700;">${summary.trend}</span>
         </div>
+        ${scoresHtml}
     `;
 }
 
@@ -178,26 +223,17 @@ function applyIndicatorToggles() {
         (chartDataCache.candles || []).map((c) => ({ time: c.time, value: chartDataCache.levels?.resistance })),
     );
 
-    setSeriesVisible(
-        seriesRefs.slLine,
-        toggleState.tradePlan,
-        (chartDataCache.candles || []).map((c) => ({ time: c.time, value: window.tradePlan?.stop_loss })),
-    );
-    setSeriesVisible(
-        seriesRefs.tp1Line,
-        toggleState.tradePlan,
-        (chartDataCache.candles || []).map((c) => ({ time: c.time, value: window.tradePlan?.tp1 })),
-    );
-    setSeriesVisible(
-        seriesRefs.tp2Line,
-        toggleState.tradePlan,
-        (chartDataCache.candles || []).map((c) => ({ time: c.time, value: window.tradePlan?.tp2 })),
-    );
-    setSeriesVisible(
-        seriesRefs.tp3Line,
-        toggleState.tradePlan,
-        (chartDataCache.candles || []).map((c) => ({ time: c.time, value: window.tradePlan?.tp3 })),
-    );
+    if (toggleState.tradePlan) {
+        setHorizontalLine(seriesRefs.slLine, chartDataCache.candles || [], window.tradePlan?.stop_loss);
+        setHorizontalLine(seriesRefs.tp1Line, chartDataCache.candles || [], window.tradePlan?.tp1);
+        setHorizontalLine(seriesRefs.tp2Line, chartDataCache.candles || [], window.tradePlan?.tp2);
+        setHorizontalLine(seriesRefs.tp3Line, chartDataCache.candles || [], window.tradePlan?.tp3);
+    } else {
+        setSeriesVisible(seriesRefs.slLine, false, []);
+        setSeriesVisible(seriesRefs.tp1Line, false, []);
+        setSeriesVisible(seriesRefs.tp2Line, false, []);
+        setSeriesVisible(seriesRefs.tp3Line, false, []);
+    }
 
     setSeriesVisible(seriesRefs.volSeries, toggleState.volumePane, volumeDataWithToggle());
     setSeriesVisible(seriesRefs.volMaSeries, toggleState.volumePane && toggleState.volMa, chartDataCache.indicators?.vol_ma20);
@@ -217,7 +253,11 @@ function applyIndicatorToggles() {
 }
 
 function setHorizontalLine(series, candles, value) {
-    if (!series || !candles?.length || !isValidPriceLevel(value, candles)) return;
+    if (!series) return;
+    if (!candles?.length || !isValidPriceLevel(value, candles)) {
+        series.setData([]);
+        return;
+    }
     const line = candles.map((c) => ({ time: c.time, value: Number(value) }));
     series.setData(line);
 }
@@ -259,7 +299,7 @@ async function initAdvancedChart(period = "3mo") {
 
     mainChart = LightweightCharts.createChart(mainContainer, {
         width: mainContainer.clientWidth,
-        height: 360,
+        height: MAIN_CHART_HEIGHT,
         layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
         grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
         timeScale: { borderColor: "#1e1e2e", timeVisible: true },
@@ -324,7 +364,7 @@ async function initAdvancedChart(period = "3mo") {
 
     volumeChart = LightweightCharts.createChart(volContainer, {
         width: volContainer.clientWidth,
-        height: 120,
+        height: SUB_CHART_HEIGHT,
         layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
         grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
         timeScale: { borderColor: "#1e1e2e", timeVisible: false },
@@ -344,7 +384,7 @@ async function initAdvancedChart(period = "3mo") {
 
     macdChart = LightweightCharts.createChart(macdContainer, {
         width: macdContainer.clientWidth,
-        height: 120,
+        height: SUB_CHART_HEIGHT,
         layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
         grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
         timeScale: { borderColor: "#1e1e2e", timeVisible: true },
@@ -377,7 +417,7 @@ async function initAdvancedChart(period = "3mo") {
         if (macdChart) macdChart.applyOptions({ width: macdContainer.clientWidth });
     });
 
-    renderIndicatorSummary(data.summary || {});
+    renderIndicatorSummary(data.summary || {}, latestScores);
     applyIndicatorToggles();
 }
 
@@ -407,7 +447,7 @@ async function renderBasicFallbackChart(period = "3mo") {
 
     mainChart = LightweightCharts.createChart(mainContainer, {
         width: mainContainer.clientWidth,
-        height: 360,
+        height: MAIN_CHART_HEIGHT,
         layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
         grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
         timeScale: { borderColor: "#1e1e2e", timeVisible: true },
@@ -440,12 +480,210 @@ function renderGateRows(rows) {
 
 function renderTradePlan(trade) {
     const plan = trade || {};
-    const fmt = (v) => (Number(v) > 0 ? window.toRupiah(v) : "-");
-    return `
-        Entry: ${fmt(plan.entry_low)} - ${fmt(plan.entry_high)}<br>
-        SL: ${fmt(plan.stop_loss)}<br>
-        TP1: ${fmt(plan.tp1)} · TP2: ${fmt(plan.tp2)} · TP3: ${fmt(plan.tp3)}<br>
-        R/R: ${plan.rr ? Number(plan.rr).toFixed(2) : "-"}
+    const currentPrice = Number(window._currentPriceForTradePlan || 0);
+
+    const fmt = (v) =>
+        v != null && Number(v) !== 0
+            ? `Rp ${Number(v).toLocaleString("id-ID")}`
+            : '<span style="color:#475569">—</span>';
+
+    const fmtRR = (v) =>
+        v != null && Number(v) !== 0
+            ? `<span style="color:${Number(v) >= 2 ? "#00ff88" : Number(v) >= 1.5 ? "#fbbf24" : "#ff3b5c"}">${Number(v).toFixed(2)}x</span>`
+            : '<span style="color:#475569">—</span>';
+
+    const pctFromEntry = (target, entry) => {
+        const t = Number(target);
+        const e = Number(entry);
+        if (!Number.isFinite(t) || !Number.isFinite(e) || e <= 0) return "";
+        const pct = ((t - e) / e * 100).toFixed(1);
+        const color = Number(pct) >= 0 ? "#00ff88" : "#ff3b5c";
+        return `<span style="color:${color};font-size:11px;margin-left:4px">${Number(pct) > 0 ? "+" : ""}${pct}%</span>`;
+    };
+
+    const entry = Number(plan.entry_low) > 0 ? Number(plan.entry_low) : currentPrice;
+    const rows = [
+        {
+            label: "📥 Entry Zone",
+            value: Number(plan.entry_low) > 0 && Number(plan.entry_high) > 0
+                ? `${fmt(plan.entry_low)} – ${fmt(plan.entry_high)}`
+                : fmt(entry),
+            sub: "",
+        },
+        {
+            label: "🛑 Stop Loss",
+            value: fmt(plan.stop_loss),
+            sub: pctFromEntry(plan.stop_loss, entry),
+        },
+        {
+            label: "🎯 TP1",
+            value: fmt(plan.tp1),
+            sub: pctFromEntry(plan.tp1, entry),
+        },
+        {
+            label: "🎯 TP2",
+            value: fmt(plan.tp2),
+            sub: pctFromEntry(plan.tp2, entry),
+        },
+        {
+            label: "🎯 TP3",
+            value: fmt(plan.tp3),
+            sub: pctFromEntry(plan.tp3, entry),
+        },
+        {
+            label: "⚖️ Risk/Reward",
+            value: fmtRR(plan.rr),
+            sub: "",
+        },
+    ];
+
+    const rowsHtml = rows.map((r) => `
+        <div style="
+            display:flex;justify-content:space-between;align-items:center;
+            padding:8px 0;border-bottom:1px solid #1e293b;
+        ">
+            <span style="color:#94a3b8;font-size:12px;">${r.label}</span>
+            <span style="font-size:13px;font-weight:600;color:#f1f5f9;">
+                ${r.value}${r.sub || ""}
+            </span>
+        </div>
+    `).join("");
+
+    const fallbackBadge = plan.is_fallback
+        ? `<div style="
+            margin-top:8px;padding:6px 10px;
+            background:#1e293b;border-radius:6px;
+            font-size:11px;color:#64748b;
+        ">
+            ⚠️ Plan dihitung dari Support/Resistance (analyzer tidak generate plan untuk saham ini)
+        </div>`
+        : "";
+
+    const riskCalc = `
+        <div style="margin-top:12px;">
+            <div style="font-size:11px;color:#64748b;margin-bottom:6px;">💰 RISK CALCULATOR</div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input
+                    id="modal-input"
+                    type="number"
+                    placeholder="Modal (Rp)"
+                    style="
+                        flex:1;padding:6px 8px;
+                        background:#0f172a;border:1px solid #334155;
+                        border-radius:6px;color:#f1f5f9;font-size:12px;
+                    "
+                    oninput="calcRisk(this.value)"
+                />
+            </div>
+            <div id="risk-result" style="margin-top:6px;font-size:12px;color:#94a3b8;"></div>
+        </div>
+    `;
+
+    window._tradePlan = plan;
+    window.calcRisk = function calcRisk(modalStr) {
+        const modal = parseFloat(modalStr);
+        if (!modal || modal <= 0) return;
+        const p = window._tradePlan || {};
+        const price = Number(window._currentPriceForTradePlan || 0);
+        if (!price || price <= 0) return;
+
+        const lots = Math.floor(modal / (price * 100));
+        const shares = lots * 100;
+        const totalCost = shares * price;
+        const sl = Number(p.stop_loss) > 0 ? Number(p.stop_loss) : price * 0.97;
+        const tp1 = Number(p.tp1) > 0 ? Number(p.tp1) : price;
+        const riskPerShare = price - sl;
+        const maxLoss = riskPerShare * shares;
+        const potentialTP1 = shares * (tp1 - price);
+
+        const riskRoot = document.getElementById("risk-result");
+        if (!riskRoot) return;
+        riskRoot.innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px;">
+                <span style="color:#64748b">Lot:</span>
+                <span style="color:#f1f5f9;font-weight:600">${lots.toLocaleString("id-ID")} lot</span>
+                <span style="color:#64748b">Lembar:</span>
+                <span style="color:#f1f5f9">${shares.toLocaleString("id-ID")} lembar</span>
+                <span style="color:#64748b">Total modal:</span>
+                <span style="color:#f1f5f9">Rp ${totalCost.toLocaleString("id-ID")}</span>
+                <span style="color:#ff3b5c">Max loss (SL):</span>
+                <span style="color:#ff3b5c;font-weight:600">-Rp ${maxLoss.toLocaleString("id-ID")}</span>
+                <span style="color:#00ff88">Profit TP1:</span>
+                <span style="color:#00ff88;font-weight:600">+Rp ${potentialTP1.toLocaleString("id-ID")}</span>
+            </div>
+        `;
+    };
+
+    return rowsHtml + fallbackBadge + riskCalc;
+}
+
+function setTradePlanForChart(plan) {
+    const data = plan || {};
+    window.tradePlan = {
+        stop_loss: Number(data.stop_loss) > 0 ? Number(data.stop_loss) : null,
+        tp1: Number(data.tp1) > 0 ? Number(data.tp1) : null,
+        tp2: Number(data.tp2) > 0 ? Number(data.tp2) : null,
+        tp3: Number(data.tp3) > 0 ? Number(data.tp3) : null,
+    };
+}
+
+function renderMLForecast(forecast, patterns) {
+    const root = document.getElementById("ml-forecast");
+    if (!root) return;
+    if (!forecast) {
+        root.innerHTML = '<span style="color:#475569">Data tidak tersedia</span>';
+        return;
+    }
+
+    const confColor = { HIGH: "#00ff88", MEDIUM: "#fbbf24", LOW: "#ff3b5c" };
+    const p5 = ((Number(forecast.probability_5pct) || 0) * 100).toFixed(0);
+    const expected = ((Number(forecast.expected_return) || 0) * 100).toFixed(1);
+    const conf = forecast.confidence || "LOW";
+
+    const patternList = (patterns || []).slice(0, 4).map((p) => {
+        if (typeof p === "string") return p;
+        return p?.name || "";
+    }).filter(Boolean);
+    const patternsHtml = patternList.length
+        ? patternList.map((p) => `
+            <span style="
+                display:inline-block;
+                padding:2px 8px;margin:2px;
+                background:#1e293b;border-radius:4px;
+                font-size:11px;color:#94a3b8;
+            ">${String(p).replaceAll("_", " ")}</span>
+        `).join("")
+        : '<span style="color:#475569;font-size:12px;">Tidak ada pola terdeteksi</span>';
+
+    root.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
+            <div style="background:#0f172a;border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:11px;color:#64748b;margin-bottom:4px;">Prob. Naik 5%</div>
+                <div style="font-size:22px;font-weight:700;color:${Number(p5) >= 60 ? "#00ff88" : Number(p5) >= 40 ? "#fbbf24" : "#ff3b5c"};">
+                    ${p5}%
+                </div>
+            </div>
+            <div style="background:#0f172a;border-radius:8px;padding:10px;text-align:center;">
+                <div style="font-size:11px;color:#64748b;margin-bottom:4px;">Expected Return</div>
+                <div style="font-size:22px;font-weight:700;color:${Number(expected) >= 0 ? "#00ff88" : "#ff3b5c"};">
+                    ${Number(expected) > 0 ? "+" : ""}${expected}%
+                </div>
+            </div>
+        </div>
+        <div style="
+            display:flex;justify-content:space-between;align-items:center;
+            padding:8px;background:#0f172a;border-radius:6px;margin-bottom:10px;
+        ">
+            <span style="font-size:12px;color:#94a3b8;">Confidence</span>
+            <span style="
+                font-size:12px;font-weight:700;
+                color:${confColor[conf] || "#64748b"};
+                background:${(confColor[conf] || "#64748b")}22;
+                padding:2px 10px;border-radius:4px;
+            ">${conf}</span>
+        </div>
+        <div style="font-size:11px;color:#64748b;margin-bottom:6px;">🕯️ POLA TERDETEKSI</div>
+        <div>${patternsHtml}</div>
     `;
 }
 
@@ -459,19 +697,17 @@ async function loadScoring() {
         <div class="text-sm">Gate: ${data.gates?.passed || 0}/${data.gates?.total || 6} (${data.gates?.confidence || "-"})</div>
         <div class="text-sm text-muted">Composite: ${data.scores?.composite_score || 0}</div>
     `;
-    document.getElementById("trade-plan").innerHTML = renderTradePlan(data.trade_plan);
-    window.tradePlan = {
-        stop_loss: Number(data.trade_plan?.stop_loss) > 0 ? Number(data.trade_plan?.stop_loss) : null,
-        tp1: Number(data.trade_plan?.tp1) > 0 ? Number(data.trade_plan?.tp1) : null,
-        tp2: Number(data.trade_plan?.tp2) > 0 ? Number(data.trade_plan?.tp2) : null,
-        tp3: Number(data.trade_plan?.tp3) > 0 ? Number(data.trade_plan?.tp3) : null,
-    };
+    latestScores = data.scores || latestScores;
+    document.getElementById("trade-plan").innerHTML = renderTradePlan(data.trade_plan || {});
+    setTradePlanForChart(data.trade_plan || {});
 }
 
 function renderFull(data) {
     const latest = data.latest || {};
     const sentiment = data.sentiment || {};
     const forecast = data.forecast || {};
+    window._currentPriceForTradePlan = Number(latest.price) || 0;
+    latestScores = data.analysis || latestScores;
     document.getElementById("stock-headline").textContent =
         `${window.toRupiah(latest.price || 0)} | Vol ${Math.round((latest.volume || 0) / 1000000)}M`;
 
@@ -482,19 +718,9 @@ function renderFull(data) {
 
     const tradePlan = (data.analysis || {}).trade_plan || {};
     document.getElementById("trade-plan").innerHTML = renderTradePlan(tradePlan);
-    window.tradePlan = {
-        stop_loss: Number(tradePlan.stop_loss) > 0 ? Number(tradePlan.stop_loss) : null,
-        tp1: Number(tradePlan.tp1) > 0 ? Number(tradePlan.tp1) : null,
-        tp2: Number(tradePlan.tp2) > 0 ? Number(tradePlan.tp2) : null,
-        tp3: Number(tradePlan.tp3) > 0 ? Number(tradePlan.tp3) : null,
-    };
-
-    document.getElementById("ml-forecast").innerHTML = `
-        Prob +5%: ${Math.round((forecast.probability_5pct || 0) * 100)}%<br>
-        Expected: ${window.toPct((forecast.expected_return || 0) * 100)}<br>
-        Confidence: ${forecast.confidence || "-"}<br>
-        Cases: ${forecast.similar_cases || 0}
-    `;
+    setTradePlanForChart(tradePlan);
+    renderMLForecast(forecast, data.patterns || []);
+    renderIndicatorSummary(chartDataCache?.summary || {}, data.analysis || {});
 
     const patterns = data.patterns || [];
     document.getElementById("pattern-panel").innerHTML = patterns.length

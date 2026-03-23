@@ -140,7 +140,7 @@ body.app-body {
 }
 
 .main-chart-pane {
-    height: 360px;
+    height: 560px;
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
@@ -148,7 +148,7 @@ body.app-body {
 
 .sub-chart-pane {
     margin-top: 6px;
-    height: 120px;
+    height: 140px;
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
