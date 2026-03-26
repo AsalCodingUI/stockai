@@ -237,6 +237,13 @@ def _resolve_period(period: str | None, timeframe: str | None) -> str:
     return "3mo"
 
 
+def _normalize_tujuan(value: str | None) -> str:
+    raw = (value or "swing").strip().lower()
+    if raw in {"scalp", "swing", "invest"}:
+        return raw
+    return "swing"
+
+
 def _symbol_to_yf(symbol: str) -> str:
     clean = symbol.strip().upper()
     if clean.startswith("^"):
@@ -1060,8 +1067,12 @@ async def scan_stream(index: str = Query("ALL", description="Index name")) -> St
 
 
 @api_router.get("/stock/{symbol}/full")
-async def get_stock_full(symbol: str) -> dict:
+async def get_stock_full(
+    symbol: str,
+    tujuan: str = Query("swing", description="scalp | swing | invest"),
+) -> dict:
     clean_symbol = symbol.upper().strip()
+    tujuan_clean = _normalize_tujuan(tujuan)
     idx_source = IDXIndexSource()
     yahoo = YahooFinanceSource()
 
@@ -1117,7 +1128,7 @@ async def get_stock_full(symbol: str) -> dict:
         symbol=clean_symbol,
         df=history,
         modal=5_000_000,
-        tujuan="swing",
+        tujuan=tujuan_clean,
         ihsg_trend=str(market_ctx.get("ihsg_trend", "UNKNOWN")),
         sentiment_label=sentiment_label,
         sentiment_score=sentiment_score,
@@ -1191,6 +1202,7 @@ async def get_stock_full(symbol: str) -> dict:
                     "confidence": unified_decision.confidence,
                     "summary": unified_decision.summary,
                     "warning": unified_decision.warning[:3],
+                    "tujuan": tujuan_clean,
                 }
             ),
         },
@@ -1206,9 +1218,13 @@ async def get_stock_full(symbol: str) -> dict:
 
 
 @api_router.get("/stock/{symbol}/scoring")
-async def get_stock_scoring(symbol: str) -> dict:
+async def get_stock_scoring(
+    symbol: str,
+    tujuan: str = Query("swing", description="scalp | swing | invest"),
+) -> dict:
     """Fast stock scoring endpoint without heavy ML/news aggregation."""
     clean_symbol = symbol.upper().strip()
+    tujuan_clean = _normalize_tujuan(tujuan)
     idx_source = IDXIndexSource()
     yahoo = YahooFinanceSource()
 
@@ -1254,7 +1270,7 @@ async def get_stock_scoring(symbol: str) -> dict:
         symbol=clean_symbol,
         df=history,
         modal=5_000_000,
-        tujuan="swing",
+        tujuan=tujuan_clean,
         ihsg_trend=str(market_ctx.get("ihsg_trend", "UNKNOWN")),
         sentiment_label=sentiment_label,
         sentiment_score=sentiment_score,
@@ -1296,6 +1312,7 @@ async def get_stock_scoring(symbol: str) -> dict:
                 "confidence": unified_decision.confidence,
                 "summary": unified_decision.summary,
                 "warning": unified_decision.warning[:3],
+                "tujuan": tujuan_clean,
             }
         ),
         "support_resistance": {

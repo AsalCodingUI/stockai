@@ -71,15 +71,43 @@ async def generate_unified_decision(
 
 def decision_to_trade_plan(decision: CoachDecision) -> dict[str, Any]:
     """Normalize decision fields to canonical trade plan schema."""
-    tp3 = decision.target2 * 1.08 if decision.target2 else None
+    tujuan = str(getattr(decision, "tujuan", "swing") or "swing").lower()
+    entry_low = float(decision.entry_low or 0) or None
+    entry_high = float(decision.entry_high or 0) or None
+    stop_loss = float(decision.stop_loss or 0) or None
+    tp1 = float(decision.target1 or 0) or None
+    tp2 = float(decision.target2 or 0) or None
+    tp3 = (tp2 * 1.08) if tp2 else None
+
+    # Intraday/swing-harian profile: tighten targets and risk window.
+    if tujuan == "scalp" and entry_high:
+        scalp_tp1 = round(entry_high * 1.03, 2)
+        scalp_tp2 = round(entry_high * 1.06, 2)
+        scalp_tp3 = round(entry_high * 1.09, 2)
+        scalp_sl = round(entry_low * 0.98, 2) if entry_low else round(entry_high * 0.98, 2)
+
+        tp1 = min(tp1, scalp_tp1) if tp1 else scalp_tp1
+        tp2 = min(tp2, scalp_tp2) if tp2 else scalp_tp2
+        tp3 = min(tp3, scalp_tp3) if tp3 else scalp_tp3
+        if stop_loss:
+            stop_loss = max(stop_loss, scalp_sl)
+        else:
+            stop_loss = scalp_sl
+
+    rr = None
+    if entry_low and stop_loss and tp1:
+        risk = entry_low - stop_loss
+        reward = tp1 - entry_low
+        rr = round((reward / risk), 2) if risk > 0 else None
+
     return {
-        "entry_low": float(decision.entry_low or 0) or None,
-        "entry_high": float(decision.entry_high or 0) or None,
-        "stop_loss": float(decision.stop_loss or 0) or None,
-        "tp1": float(decision.target1 or 0) or None,
-        "tp2": float(decision.target2 or 0) or None,
-        "tp3": float(tp3 or 0) or None,
-        "rr": float(decision.risk_reward or 0) or None,
+        "entry_low": entry_low,
+        "entry_high": entry_high,
+        "stop_loss": stop_loss,
+        "tp1": tp1,
+        "tp2": tp2,
+        "tp3": tp3,
+        "rr": rr if rr is not None else (float(decision.risk_reward or 0) or None),
+        "tujuan": tujuan,
         "source": "unified_decision_engine_v1",
     }
-

@@ -3,6 +3,7 @@ let mainChart = null;
 let volumeChart = null;
 let macdChart = null;
 let currentPeriod = "3mo";
+let currentTujan = "swing";
 const MAIN_CHART_HEIGHT = 560;
 const SUB_CHART_HEIGHT = 140;
 window.tradePlan = null;
@@ -625,6 +626,7 @@ function setTradePlanForChart(plan) {
         tp2: Number(data.tp2) > 0 ? Number(data.tp2) : null,
         tp3: Number(data.tp3) > 0 ? Number(data.tp3) : null,
     };
+    if (chartDataCache) applyIndicatorToggles();
 }
 
 function renderMLForecast(forecast, patterns) {
@@ -688,7 +690,10 @@ function renderMLForecast(forecast, patterns) {
 }
 
 async function loadScoring() {
-    const data = await window.fetchWithTimeout(`/api/stock/${symbol}/scoring`, 15000);
+    const data = await window.fetchWithTimeout(
+        `/api/stock/${symbol}/scoring?tujuan=${encodeURIComponent(currentTujan)}`,
+        15000,
+    );
     if (!data) {
         document.getElementById("gate-status").innerHTML = '<div class="text-muted">Scoring unavailable</div>';
         return;
@@ -740,7 +745,10 @@ async function loadStockDetail() {
     await loadScoring();
     await initAdvancedChart(currentPeriod);
 
-    window.fetchWithTimeout(`/api/stock/${symbol}/full`, 20000).then((data) => {
+    window.fetchWithTimeout(
+        `/api/stock/${symbol}/full?tujuan=${encodeURIComponent(currentTujan)}`,
+        20000,
+    ).then((data) => {
         if (!data) {
             document.getElementById("ml-forecast").innerHTML = '<div class="text-muted">Analysis unavailable</div>';
             return;
@@ -756,6 +764,12 @@ function activateTfButton(period) {
     });
 }
 
+function activatePlanButton(tujuan) {
+    document.querySelectorAll(".plan-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.tujuan === tujuan);
+    });
+}
+
 window.addEventListener("resize", () => {
     const mainContainer = document.getElementById("main-chart");
     const volContainer = document.getElementById("volume-chart");
@@ -768,6 +782,7 @@ window.addEventListener("resize", () => {
 document.addEventListener("DOMContentLoaded", () => {
     renderIndicatorToggles();
     activateTfButton(currentPeriod);
+    activatePlanButton(currentTujan);
     loadStockDetail().catch(console.error);
 
     document.querySelectorAll(".tf-btn").forEach((btn) => {
@@ -776,6 +791,23 @@ document.addEventListener("DOMContentLoaded", () => {
             currentPeriod = period;
             activateTfButton(period);
             await initAdvancedChart(period);
+        });
+    });
+
+    document.querySelectorAll(".plan-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+            const tujuan = btn.dataset.tujuan || "swing";
+            currentTujan = tujuan;
+            activatePlanButton(tujuan);
+            await loadScoring();
+            const full = await window.fetchWithTimeout(
+                `/api/stock/${symbol}/full?tujuan=${encodeURIComponent(currentTujan)}`,
+                20000,
+            );
+            if (full) {
+                renderFull(full);
+                await initAdvancedChart(currentPeriod);
+            }
         });
     });
 });

@@ -18,12 +18,19 @@
 <section class="card mt-4">
     <div class="flex items-center justify-between">
         <div class="section-title">Advanced Candlestick</div>
-        <div class="flex gap-2">
-            <button class="btn-filter tf-btn active" data-period="1wk">1W</button>
-            <button class="btn-filter tf-btn" data-period="1mo">1M</button>
-            <button class="btn-filter tf-btn" data-period="3mo">3M</button>
-            <button class="btn-filter tf-btn" data-period="6mo">6M</button>
-            <button class="btn-filter tf-btn" data-period="1y">1Y</button>
+        <div class="flex gap-2 items-center">
+            <div class="flex gap-2">
+                <button class="btn-filter plan-btn" data-tujuan="scalp">SCALP</button>
+                <button class="btn-filter plan-btn active" data-tujuan="swing">SWING</button>
+                <button class="btn-filter plan-btn" data-tujuan="invest">INVEST</button>
+            </div>
+            <div class="flex gap-2">
+                <button class="btn-filter tf-btn active" data-period="1wk">1W</button>
+                <button class="btn-filter tf-btn" data-period="1mo">1M</button>
+                <button class="btn-filter tf-btn" data-period="3mo">3M</button>
+                <button class="btn-filter tf-btn" data-period="6mo">6M</button>
+                <button class="btn-filter tf-btn" data-period="1y">1Y</button>
+            </div>
         </div>
     </div>
     <div id="indicator-toggles" class="indicator-toggles mt-3"></div>
