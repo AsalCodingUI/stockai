@@ -186,7 +186,8 @@ class WatchlistMonitor:
         return ctx
 
     async def _scan_all(self) -> None:
-        from stockai.core.coach import analyze_entry
+        from stockai.core.decision_engine import generate_unified_decision
+        from stockai.core.realtime import get_realtime_pipeline
         from stockai.core.sentiment.stockbit import StockbitSentiment
         from stockai.core.watchlist import get_watchlist
         from stockai.data.sources.yahoo import YahooFinanceSource
@@ -198,6 +199,7 @@ class WatchlistMonitor:
             return
 
         yahoo = YahooFinanceSource()
+        realtime = get_realtime_pipeline()
         sentiment_engine = StockbitSentiment()
         symbols = [s["symbol"] for s in stocks]
         loop = asyncio.get_running_loop()
@@ -277,7 +279,7 @@ class WatchlistMonitor:
                     else "NEUTRAL"
                 )
 
-                decision = await analyze_entry(
+                decision = await generate_unified_decision(
                     symbol=symbol,
                     df=df_daily,
                     modal=modal,
@@ -290,14 +292,8 @@ class WatchlistMonitor:
                     advance_ratio=float(market_ctx.get("advance_ratio", 0.5)),
                     leading_sector=str(market_ctx.get("leading_sector", "UNKNOWN")),
                     lagging_sector=str(market_ctx.get("lagging_sector", "UNKNOWN")),
+                    mtf_score=mtf_score,
                 )
-
-                if mtf_score <= -2 and decision.action == "ENTRY_NOW":
-                    decision.action = "WAIT"
-                    decision.confidence = max(30, decision.confidence - 20)
-                    decision.warning.append(
-                        "Konfirmasi multi-timeframe masih bearish, tunggu setup lebih rapih."
-                    )
 
                 watchlist.update_last_signal(symbol, decision.action)
                 logger.info(
@@ -329,6 +325,18 @@ class WatchlistMonitor:
                         "warning": decision.warning[:2],
                     }
                 )
+                realtime.publish(
+                    {
+                        "type": "monitor_decision",
+                        "symbol": symbol,
+                        "action": decision.action,
+                        "confidence": decision.confidence,
+                        "price": current_price,
+                        "mtf_score": mtf_score,
+                        "market_breadth": market_ctx.get("market_breadth"),
+                        "sentiment_label": sentiment_label,
+                    }
+                )
 
                 if decision.action == "ENTRY_NOW" and decision.confidence >= 60:
                     await send_coach_alert(decision)
@@ -344,6 +352,18 @@ class WatchlistMonitor:
                             "stop_loss": decision.stop_loss,
                             "target1": decision.target1,
                             "risk_reward": decision.risk_reward,
+                        }
+                    )
+                    realtime.publish(
+                        {
+                            "type": "telegram_alert",
+                            "symbol": symbol,
+                            "action": decision.action,
+                            "confidence": decision.confidence,
+                            "entry_low": decision.entry_low,
+                            "entry_high": decision.entry_high,
+                            "stop_loss": decision.stop_loss,
+                            "target1": decision.target1,
                         }
                     )
 

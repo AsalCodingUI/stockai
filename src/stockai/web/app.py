@@ -55,12 +55,16 @@ def create_app() -> FastAPI:
     async def startup_event():
         from stockai.scheduler.runner import start_scheduler
         from stockai.core.monitor import get_monitor
+        from stockai.core.realtime import get_realtime_pipeline
 
         app.state.scheduler = start_scheduler()
         app.state.watchlist_monitor = get_monitor()
         app.state.watchlist_monitor.start()
+        app.state.realtime_pipeline = get_realtime_pipeline()
+        app.state.realtime_pipeline.start()
         logger.info("✅ Scheduler started")
         logger.info("✅ Watchlist monitor started")
+        logger.info("✅ Realtime signal pipeline started")
 
     @app.on_event("shutdown")
     async def shutdown_event():
@@ -70,6 +74,9 @@ def create_app() -> FastAPI:
         monitor = getattr(app.state, "watchlist_monitor", None)
         if monitor is not None:
             monitor.stop()
+        realtime = getattr(app.state, "realtime_pipeline", None)
+        if realtime is not None:
+            realtime.stop()
 
     # Exception handlers
     @app.exception_handler(HTTPException)

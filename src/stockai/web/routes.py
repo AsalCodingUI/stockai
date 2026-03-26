@@ -31,7 +31,9 @@ from stockai.core.volume_detector import UnusualVolumeDetector
 from stockai.core.sentiment.stockbit import StockbitSentiment
 from stockai.core.ml.probability import ProbabilityEngine
 from stockai.core.backtest import BacktestEngine, STRATEGY_MAP
-from stockai.core.coach import analyze_entry
+from stockai.core.adaptive import get_adaptive_weight_engine
+from stockai.core.decision_engine import decision_to_trade_plan, generate_unified_decision
+from stockai.core.realtime import get_realtime_pipeline
 from stockai.core.watchlist import get_watchlist as get_local_watchlist
 from stockai.core.monitor import get_monitor
 from stockai.web.schemas import (
@@ -336,7 +338,6 @@ def _build_signal_event(symbol: str) -> dict[str, Any]:
         sentiment_signal=sentiment_signal,
     )
     support_distance_pct = _safe_support_distance_pct(analysis)
-
     forecast = probability.forecast(
         symbol,
         {
@@ -891,7 +892,7 @@ async def analyze_coach_stock_api(
         except Exception:
             pass
 
-        decision = await analyze_entry(
+        decision = await generate_unified_decision(
             symbol=clean,
             df=df,
             modal=modal,
@@ -904,12 +905,23 @@ async def analyze_coach_stock_api(
             advance_ratio=float(market_ctx.get("advance_ratio", 0.5)),
             leading_sector=str(market_ctx.get("leading_sector", "UNKNOWN")),
             lagging_sector=str(market_ctx.get("lagging_sector", "UNKNOWN")),
+            mtf_score=0,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     payload = decision.__dict__.copy()
     payload["snapshot"] = _to_native(decision.snapshot.__dict__) if decision.snapshot else None
+    get_realtime_pipeline().publish(
+        {
+            "type": "manual_analyze",
+            "symbol": clean,
+            "action": decision.action,
+            "confidence": decision.confidence,
+            "modal": modal,
+            "tujuan": tujuan,
+        }
+    )
     return _to_native(payload)
 
 
@@ -942,6 +954,43 @@ async def get_coach_monitor_logs_api(
             "alert_count": len(alerts),
         }
     )
+
+
+@api_router.get("/realtime/status")
+async def get_realtime_status_api() -> dict[str, Any]:
+    return _to_native(get_realtime_pipeline().status())
+
+
+@api_router.get("/realtime/signals")
+async def get_realtime_signals_api(limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
+    rows = get_realtime_pipeline().get_recent(limit=limit)
+    return _to_native({"count": len(rows), "signals": rows})
+
+
+@api_router.get("/adaptive/status")
+async def get_adaptive_status_api() -> dict[str, Any]:
+    return _to_native(get_adaptive_weight_engine().get_status())
+
+
+@api_router.post("/adaptive/feedback")
+async def post_adaptive_feedback_api(payload: dict[str, Any]) -> dict[str, Any]:
+    symbol = str(payload.get("symbol", "")).upper().strip()
+    action = str(payload.get("action", "ENTRY_NOW")).upper()
+    confidence = int(payload.get("predicted_confidence", 50))
+    realized = float(payload.get("realized_return_pct", 0.0))
+    hold_days = int(payload.get("hold_days", 1))
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol wajib diisi")
+
+    row = get_adaptive_weight_engine().record_outcome(
+        symbol=symbol,
+        action=action,
+        predicted_confidence=confidence,
+        realized_return_pct=realized,
+        hold_days=hold_days,
+    )
+    get_realtime_pipeline().publish({"type": "adaptive_feedback", **row})
+    return _to_native({"success": True, "result": row})
 
 
 @api_router.post("/coach/test-telegram")
@@ -1102,7 +1151,16 @@ async def get_stock_full(symbol: str) -> dict:
             "momentum_score": round(float(analysis.momentum_score), 1),
             "volatility_score": round(float(analysis.volatility_score), 1),
             "gate_status": gate_status,
-            "trade_plan": _build_trade_plan_fallback(analysis, _price_or_none(analysis.current_price)),
+            "trade_plan": unified_trade_plan,
+            "trade_plan_legacy": _build_trade_plan_fallback(analysis, _price_or_none(analysis.current_price)),
+            "unified_decision": _to_native(
+                {
+                    "action": unified_decision.action,
+                    "confidence": unified_decision.confidence,
+                    "summary": unified_decision.summary,
+                    "warning": unified_decision.warning[:3],
+                }
+            ),
         },
         "smart_money": flow_signal,
         "volume": volume_signal,
@@ -1143,6 +1201,39 @@ async def get_stock_scoring(symbol: str) -> dict:
         unusual_volume_signal={"classification": "NORMAL", "volume_ratio": 1.0, "price_action": "NEUTRAL"},
         sentiment_signal={"sentiment": "NEUTRAL", "score": 0, "source": "stockbit"},
     )
+    sentiment_signal = StockbitSentiment().analyze(clean_symbol)
+    monitor = get_monitor()
+    market_ctx = getattr(monitor, "_last_market_context", None) or {
+        "ihsg_trend": "UNKNOWN",
+        "market_breadth": "MIXED",
+        "advance_ratio": 0.5,
+        "leading_sector": "UNKNOWN",
+        "lagging_sector": "UNKNOWN",
+    }
+    sentiment_label = str(sentiment_signal.get("sentiment", "NEUTRAL")).upper()
+    sentiment_raw = float(sentiment_signal.get("score", 0))
+    sentiment_score = max(0.0, min(100.0, 50.0 + sentiment_raw * 5.0))
+    news_bias = (
+        "POSITIVE" if sentiment_label == "BULLISH"
+        else "NEGATIVE" if sentiment_label == "BEARISH"
+        else "NEUTRAL"
+    )
+    unified_decision = await generate_unified_decision(
+        symbol=clean_symbol,
+        df=history,
+        modal=5_000_000,
+        tujuan="swing",
+        ihsg_trend=str(market_ctx.get("ihsg_trend", "UNKNOWN")),
+        sentiment_label=sentiment_label,
+        sentiment_score=sentiment_score,
+        news_bias=news_bias,
+        market_breadth=str(market_ctx.get("market_breadth", "MIXED")),
+        advance_ratio=float(market_ctx.get("advance_ratio", 0.5)),
+        leading_sector=str(market_ctx.get("leading_sector", "UNKNOWN")),
+        lagging_sector=str(market_ctx.get("lagging_sector", "UNKNOWN")),
+        mtf_score=0,
+    )
+    unified_trade_plan = decision_to_trade_plan(unified_decision)
 
     sr = getattr(analysis, "support_resistance", None)
     sr_resistances = getattr(sr, "resistances", None) if sr else None
@@ -1165,7 +1256,16 @@ async def get_stock_scoring(symbol: str) -> dict:
             "confidence": getattr(analysis.gates, "confidence", "REJECTED"),
             "reasons": list(getattr(analysis.gates, "rejection_reasons", [])),
         },
-        "trade_plan": _build_trade_plan_fallback(analysis, _price_or_none(analysis.current_price)),
+        "trade_plan": unified_trade_plan,
+        "trade_plan_legacy": _build_trade_plan_fallback(analysis, _price_or_none(analysis.current_price)),
+        "unified_decision": _to_native(
+            {
+                "action": unified_decision.action,
+                "confidence": unified_decision.confidence,
+                "summary": unified_decision.summary,
+                "warning": unified_decision.warning[:3],
+            }
+        ),
         "support_resistance": {
             "support": _price_or_none(getattr(sr, "nearest_support", None)) if sr else None,
             "resistance": sr_resistance,
