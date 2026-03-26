@@ -1097,6 +1097,38 @@ async def get_stock_full(symbol: str) -> dict:
     )
 
     support_distance_pct = _safe_support_distance_pct(analysis)
+    monitor = get_monitor()
+    market_ctx = getattr(monitor, "_last_market_context", None) or {
+        "ihsg_trend": "UNKNOWN",
+        "market_breadth": "MIXED",
+        "advance_ratio": 0.5,
+        "leading_sector": "UNKNOWN",
+        "lagging_sector": "UNKNOWN",
+    }
+    sentiment_label = str(sentiment_signal.get("sentiment", "NEUTRAL")).upper()
+    sentiment_raw = float(sentiment_signal.get("score", 0))
+    sentiment_score = max(0.0, min(100.0, 50.0 + sentiment_raw * 5.0))
+    news_bias = (
+        "POSITIVE" if sentiment_label == "BULLISH"
+        else "NEGATIVE" if sentiment_label == "BEARISH"
+        else "NEUTRAL"
+    )
+    unified_decision = await generate_unified_decision(
+        symbol=clean_symbol,
+        df=history,
+        modal=5_000_000,
+        tujuan="swing",
+        ihsg_trend=str(market_ctx.get("ihsg_trend", "UNKNOWN")),
+        sentiment_label=sentiment_label,
+        sentiment_score=sentiment_score,
+        news_bias=news_bias,
+        market_breadth=str(market_ctx.get("market_breadth", "MIXED")),
+        advance_ratio=float(market_ctx.get("advance_ratio", 0.5)),
+        leading_sector=str(market_ctx.get("leading_sector", "UNKNOWN")),
+        lagging_sector=str(market_ctx.get("lagging_sector", "UNKNOWN")),
+        mtf_score=0,
+    )
+    unified_trade_plan = decision_to_trade_plan(unified_decision)
 
     forecast = probability.forecast(
         clean_symbol,
