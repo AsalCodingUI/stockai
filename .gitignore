@@ -171,3 +171,4 @@ credentials.json
 # BMAD generated data
 _bmad/bmm/data/
 _bmad/bmm/workflows/3-solutioning/create-architecture/data/
+.worktrees/
