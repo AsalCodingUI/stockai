@@ -2,6 +2,8 @@
 
 import subprocess
 import sys
+from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -41,14 +43,42 @@ class TestCLISetup:
         assert result.exit_code == 0
         assert "BBCA" in result.stdout
 
-    def test_cli_analyze_command_placeholder(self):
+    @patch("stockai.cli.main.get_settings")
+    @patch("stockai.agents.create_trading_orchestrator")
+    def test_cli_analyze_command_placeholder(self, mock_create_orchestrator, mock_get_settings):
         """Test analyze command exists (placeholder)."""
+        # Mock settings
+        mock_settings = MagicMock()
+        mock_settings.has_google_api = True
+        mock_get_settings.return_value = mock_settings
+
+        # Mock orchestrator
+        mock_orchestrator = MagicMock()
+        async def mock_analyze(*args, **kwargs):
+            return {"answer": "Analysis result for BBCA"}
+        mock_orchestrator.analyze = mock_analyze
+        mock_create_orchestrator.return_value = mock_orchestrator
+
         result = runner.invoke(app, ["analyze", "BBCA"])
         assert result.exit_code == 0
         assert "BBCA" in result.stdout
 
-    def test_cli_predict_command_placeholder(self):
+    @patch("stockai.cli.main.YahooFinanceSource")
+    def test_cli_predict_command_placeholder(self, mock_yahoo_class):
         """Test predict command exists (placeholder)."""
+        import pandas as pd
+        from datetime import datetime
+        mock_yahoo = MagicMock()
+        mock_yahoo.get_price_history.return_value = pd.DataFrame({
+            "date": pd.date_range(end=datetime.now(), periods=100, freq='D'),
+            "open": [100.0] * 100,
+            "high": [100.0] * 100,
+            "low": [100.0] * 100,
+            "close": [100.0] * 100,
+            "volume": [1000] * 100,
+        })
+        mock_yahoo_class.return_value = mock_yahoo
+
         result = runner.invoke(app, ["predict", "BBCA"])
         assert result.exit_code == 0
         assert "BBCA" in result.stdout
@@ -137,11 +167,12 @@ class TestModuleExecution:
 
     def test_module_execution_help(self):
         """Test python -m stockai --help works."""
+        project_root = Path(__file__).resolve().parent.parent.parent
         result = subprocess.run(
             [sys.executable, "-m", "stockai", "--help"],
             capture_output=True,
             text=True,
-            cwd="/Users/fitrakacamarga/project/self/bmad-new/stockai",
+            cwd=str(project_root),
         )
         assert result.returncode == 0
         assert "StockAI" in result.stdout

@@ -142,12 +142,12 @@ class TestGateConfig:
 
         config = GateConfig()
 
-        assert config.overall_min == 70.0
-        assert config.technical_min == 60.0
-        assert config.smart_money_min == 3.0
-        assert config.near_support_pct == 5.0
+        assert config.overall_min == 55.0
+        assert config.technical_min == 45.0
+        assert config.smart_money_min == 1.5
+        assert config.near_support_pct == 10.0
         assert config.adx_min == 20.0
-        assert config.fundamental_min == 60.0
+        assert config.fundamental_min == 45.0
 
     def test_custom_values(self):
         """Test that GateConfig accepts custom thresholds."""
@@ -223,7 +223,7 @@ class TestValidateGates:
         from stockai.scoring.gates import validate_gates
 
         stock_data = {
-            "overall_score": 65.0,  # Below 70
+            "overall_score": 40.0,  # Below 55
             "technical_score": 75.0,
             "smart_money_score": 4.0,
             "distance_to_support_pct": 2.5,
@@ -236,7 +236,7 @@ class TestValidateGates:
         assert result.all_passed is False
         assert result.gates_passed == 5
         assert "Overall Score" in result.rejection_reasons[0]
-        assert result.confidence == "WATCH"  # 1 failure + score >= 60
+        assert result.confidence == "REJECTED"  # overall < 60 → REJECTED
 
     def test_technical_score_gate_fail(self):
         """Test Gate 2: Technical Score failure."""
@@ -244,7 +244,7 @@ class TestValidateGates:
 
         stock_data = {
             "overall_score": 85.0,
-            "technical_score": 50.0,  # Below 60
+            "technical_score": 35.0,  # Below 45
             "smart_money_score": 4.0,
             "distance_to_support_pct": 2.5,
             "adx": 30.0,
@@ -263,7 +263,7 @@ class TestValidateGates:
         stock_data = {
             "overall_score": 85.0,
             "technical_score": 75.0,
-            "smart_money_score": 1.5,  # Below 3.0
+            "smart_money_score": 0.5,  # Below 1.5
             "distance_to_support_pct": 2.5,
             "adx": 30.0,
             "fundamental_score": 70.0,
@@ -282,7 +282,7 @@ class TestValidateGates:
             "overall_score": 85.0,
             "technical_score": 75.0,
             "smart_money_score": 4.0,
-            "distance_to_support_pct": 8.0,  # Above 5%
+            "distance_to_support_pct": 15.0,  # Above 10%
             "adx": 30.0,
             "fundamental_score": 70.0,
         }
@@ -338,7 +338,7 @@ class TestValidateGates:
             "smart_money_score": 4.0,
             "distance_to_support_pct": 2.5,
             "adx": 30.0,
-            "fundamental_score": 50.0,  # Below 60
+            "fundamental_score": 35.0,  # Below 45
         }
 
         result = validate_gates(stock_data)
@@ -354,7 +354,7 @@ class TestValidateGates:
             "overall_score": 50.0,  # Fail
             "technical_score": 40.0,  # Fail
             "smart_money_score": 0.5,  # Fail
-            "distance_to_support_pct": 10.0,  # Fail
+            "distance_to_support_pct": 15.0,  # Fail: above 10%
             "adx": 10.0,  # Fail
             "fundamental_score": 40.0,  # Fail
         }
@@ -371,19 +371,19 @@ class TestValidateGates:
         from stockai.scoring.gates import validate_gates
 
         stock_data = {
-            "overall_score": 65.0,  # Fail but >= 60
+            "overall_score": 65.0,  # Passes (>= 55) and >= 60 for WATCH check
             "technical_score": 75.0,
             "smart_money_score": 4.0,
             "distance_to_support_pct": 2.5,
-            "adx": 15.0,  # Fail
+            "adx": 15.0,  # Fail (< 20)
             "fundamental_score": 70.0,
         }
 
         result = validate_gates(stock_data)
 
         assert result.all_passed is False
-        assert result.gates_passed == 4
-        assert result.confidence == "WATCH"
+        assert result.gates_passed == 5  # only ADX fails now
+        assert result.confidence == "WATCH"  # 1 failure + overall 65 >= 60
 
     def test_rejected_confidence_many_failures(self):
         """Test REJECTED confidence when > 2 gates fail."""

@@ -23,7 +23,7 @@ def client():
 @pytest.fixture
 def mock_idx_source():
     """Mock IDX data source."""
-    with patch("stockai.web.routes.IDXIndexSource") as mock:
+    with patch("stockai.web.routers.stocks.IDXIndexSource") as mock:
         instance = MagicMock()
         instance.get_idx30_stocks.return_value = [
             {"symbol": "BBCA", "name": "Bank Central Asia", "price": 9500, "change_pct": 1.5, "volume": 10000000},
@@ -53,7 +53,7 @@ def mock_yahoo_source():
     import pandas as pd
     from datetime import datetime, timedelta
 
-    with patch("stockai.web.routes.YahooFinanceSource") as mock:
+    with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock:
         instance = MagicMock()
 
         # Generate sample price history with native Python types
@@ -266,7 +266,7 @@ class TestPortfolioAPI:
 
     def test_get_portfolio(self, client):
         """Should return portfolio data."""
-        with patch("stockai.web.routes.init_database"):
+        with patch("stockai.web.routers.portfolio.init_database"):
             with patch("stockai.core.portfolio.PnLCalculator") as mock_calc:
                 mock_instance = MagicMock()
                 mock_instance.get_portfolio_summary.return_value = {
@@ -374,7 +374,7 @@ class TestPageRendering:
 
     def test_portfolio_page_renders(self, client):
         """Portfolio page should render."""
-        with patch("stockai.web.routes.init_database"):
+        with patch("stockai.web.routers.portfolio.init_database"):
             with patch("stockai.core.portfolio.PnLCalculator") as mock_calc:
                 mock_instance = MagicMock()
                 mock_instance.get_portfolio_summary.return_value = {
@@ -438,8 +438,8 @@ class TestNewDashboardAPI:
 
     def test_scan_stream_sse_emits_data(self, client):
         """SSE endpoint should emit stream events."""
-        with patch("stockai.web.routes._get_index_symbols", return_value=["BBCA"]), \
-             patch("stockai.web.routes._build_signal_event", return_value={
+        with patch("stockai.web.routers.scan._get_index_symbols", return_value=["BBCA"]), \
+             patch("stockai.web.routers.scan._build_signal_event", return_value={
                  "symbol": "BBCA",
                  "score": 62,
                  "gate_passed": 4,
@@ -453,10 +453,10 @@ class TestNewDashboardAPI:
 
     def test_stock_full_endpoint_shape(self, client, mock_idx_source, mock_yahoo_source):
         """stock full endpoint should return structured payload."""
-        with patch("stockai.web.routes.ForeignFlowMonitor") as mock_flow, \
-             patch("stockai.web.routes.UnusualVolumeDetector") as mock_volume, \
-             patch("stockai.web.routes.StockbitSentiment") as mock_sentiment, \
-             patch("stockai.web.routes.ProbabilityEngine") as mock_prob:
+        with patch("stockai.web.routers.stocks.ForeignFlowMonitor") as mock_flow, \
+             patch("stockai.web.routers.stocks.UnusualVolumeDetector") as mock_volume, \
+             patch("stockai.web.routers.stocks.StockbitSentiment") as mock_sentiment, \
+             patch("stockai.web.routers.stocks.ProbabilityEngine") as mock_prob:
             mock_flow.return_value.get_flow_signal.return_value = {"signal": "NEUTRAL", "strength": "WEAK", "source": "volume_proxy"}
             mock_volume.return_value.detect.return_value = {"classification": "NORMAL", "volume_ratio": 1.2, "price_action": "NEUTRAL"}
             mock_sentiment.return_value.analyze.return_value = {"sentiment": "NEUTRAL", "score": 0, "source": "stockbit"}
@@ -787,9 +787,9 @@ class TestCachedEndpoints:
         import pandas as pd
         from datetime import datetime, timedelta
 
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo_cls, \
-             patch("stockai.core.predictor.EnsemblePredictor") as mock_predictor_cls, \
-             patch("stockai.config.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo_cls, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor_cls, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
 
             # Mock settings
             mock_settings_obj = MagicMock()
@@ -834,9 +834,9 @@ class TestCachedEndpoints:
         import pandas as pd
         from datetime import datetime, timedelta
 
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo_cls, \
-             patch("stockai.core.predictor.EnsemblePredictor") as mock_predictor_cls, \
-             patch("stockai.config.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo_cls, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor_cls, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
 
             # Mock settings
             mock_settings_obj = MagicMock()
@@ -880,9 +880,9 @@ class TestCachedEndpoints:
         import pandas as pd
         from datetime import datetime, timedelta
 
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo_cls, \
-             patch("stockai.core.predictor.EnsemblePredictor") as mock_predictor_cls, \
-             patch("stockai.config.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo_cls, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor_cls, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
 
             mock_settings_obj = MagicMock()
             mock_settings_obj.project_root = MagicMock()
@@ -924,9 +924,9 @@ class TestCachedEndpoints:
         import pandas as pd
         from datetime import datetime, timedelta
 
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo_cls, \
-             patch("stockai.core.predictor.EnsemblePredictor") as mock_predictor_cls, \
-             patch("stockai.config.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo_cls, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor_cls, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
 
             mock_settings_obj = MagicMock()
             mock_settings_obj.project_root = MagicMock()

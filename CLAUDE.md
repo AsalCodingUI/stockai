@@ -4,13 +4,6 @@
 
 This project uses `uv` for dependency management and running the CLI.
 
-### Python Path
-
-Use the Miniconda Python installation:
-```
-/Users/fitrakacamarga/miniconda3/bin/python
-```
-
 ### Command Format
 
 **Preferred (with uv):**
@@ -20,7 +13,7 @@ uv run stockai <command>
 
 **Alternative (if uv not available):**
 ```bash
-/Users/fitrakacamarga/miniconda3/bin/python -m stockai.cli.main <command>
+python -m stockai.cli.main <command>
 ```
 
 ### Available Commands
@@ -30,9 +23,21 @@ uv run stockai <command>
 - `uv run stockai autopilot` - Run autopilot mode
 - `uv run stockai backtest` - Run backtesting
 - `uv run stockai monitor` - Monitor portfolio
+- `uv run stockai portfolio summary` - Show portfolio P&L summary
 
 ### Important
 
-- Always use the Miniconda Python path: `/Users/fitrakacamarga/miniconda3/bin/python`
-- Do NOT use system `python` or `python3` directly
-- Prefer `uv run stockai` when available for proper dependency resolution
+- Prefer `uv run stockai` for proper dependency resolution
+- If uv is unavailable, use `python -m stockai.cli.main` from the project root
+
+## Design System
+
+**ALWAYS read `design.md` before making any UI/CSS/HTML changes.**
+
+The file `design.md` (at the project root) defines the canonical design language for StockAI's web UI — a Miro-inspired design system adapted for dark mode. Key rules:
+
+- All buttons & pill tabs MUST use `border-radius: 9999px` (pill shape)
+- Brand yellow `#FFD02F` → wordmark/logo ONLY, never CTA backgrounds
+- Cards: `border-radius: 16px` standard; pastel cards `28px`
+- Color tokens from `design-system.css` (e.g. `--miro-yellow`, `--miro-blue`, `--color-hairline`)
+- Dark mode always: canvas `#010102`, surface `#0F1011`

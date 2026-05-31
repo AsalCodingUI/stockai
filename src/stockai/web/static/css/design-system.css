@@ -1,0 +1,353 @@
+/**
+ * StockAI Design System — Miro DNA × Dark Mode
+ *
+ * Adapted from design.md (Miro design language) for dark surfaces.
+ * Core philosophy: Dark canvas + Miro pill shapes, pastel accents, yellow brand.
+ * Read design.md before making any changes here.
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * MIRO BRAND & ACCENT TOKENS (adapted for dark mode)
+ * ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Brand Yellow — wordmark only, promo banner, yellow-tag chips */
+  --miro-yellow:          #FFD02F;
+  --miro-yellow-deep:     #E6B800;
+  --miro-yellow-light:    rgba(255, 208, 47, 0.12);
+  --miro-yellow-dark:     #A07800;   /* yellow-tag text */
+
+  /* Brand Blue — inline links, featured pricing border */
+  --miro-blue:            #5E6AD2;
+  --miro-blue-pressed:    #4F5AB8;
+
+  /* Pastel Accents (dark-adapted — tinted backgrounds on dark surface) */
+  --miro-coral:           #E8735A;
+  --miro-coral-bg:        rgba(232, 115, 90, 0.12);
+  --miro-coral-dark:      #C4503A;
+
+  --miro-rose:            #D4648A;
+  --miro-rose-bg:         rgba(212, 100, 138, 0.12);
+
+  --miro-teal:            #2CB5A0;
+  --miro-teal-bg:         rgba(44, 181, 160, 0.12);
+  --miro-teal-dark:       #1D8A78;
+
+  --miro-mint:            #34C47A;
+
+  /* Semantic */
+  --miro-success:         #27A644;
+  --miro-success-bg:      rgba(39, 166, 68, 0.12);
+  --miro-red:             rgba(239, 68, 68, 0.15);
+  --miro-red-dark:        #EF4444;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * DARK CANVAS SURFACES (design.md surface tokens → dark adaptation)
+   * ═══════════════════════════════════════════════════════════════════════ */
+
+  /* Canvas / backgrounds */
+  --color-canvas:         #010102;   /* page bg */
+  --color-surface:        #0F1011;   /* card surface */
+  --color-surface-soft:   #141516;   /* hover surface */
+  --color-surface-yellow: rgba(255, 208, 47, 0.08);
+  --color-surface-featured: rgba(94, 106, 210, 0.10); /* lavender tint on dark */
+
+  /* Hairlines / borders */
+  --color-hairline:       #23252A;
+  --color-hairline-soft:  #1C1D21;
+  --color-hairline-strong:#34343A;
+
+  /* Text scale — Miro ink → adapted for dark */
+  --color-ink:            #F7F8F8;   /* primary text */
+  --color-ink-deep:       #FFFFFF;
+  --color-charcoal:       #D0D6E0;   /* body emphasis */
+  --color-slate:          #A0A8B4;   /* secondary text */
+  --color-steel:          #8A8F98;   /* tertiary text */
+  --color-stone:          #6B7280;   /* captions */
+  --color-muted:          #62666D;   /* disabled / placeholders */
+  --color-on-dark:        #FFFFFF;
+  --color-on-dark-muted:  rgba(255,255,255,0.55);
+
+  /* COLOR PALETTE */
+  /* Primary CTA — black pill on dark = white pill */
+  --color-primary:        #fafafa;
+  --color-primary-dark:   #f4f4f5;
+  --color-primary-light:  #ffffff;
+  --color-on-primary:     #010102;
+  --color-primary-pressed:#D0D6E0;
+
+  /* Footer bg */
+  --color-footer-bg:      #09090B;
+
+  /* Legacy aliases (keep existing code working) */
+  --color-bg-primary:     var(--color-canvas);
+  --color-bg-secondary:   var(--color-canvas);
+  --color-bg-tertiary:    var(--color-surface);
+  --color-bg-elevated:    var(--color-surface-soft);
+  --color-bg-hover:       var(--color-surface-soft);
+  --color-bg-overlay:     rgba(1,1,2,0.85);
+
+  --color-border:         var(--color-hairline);
+  --color-border-hover:   var(--color-hairline-strong);
+  --color-border-focus:   var(--miro-blue);
+  --color-border-error:   var(--miro-red-dark);
+  --color-border-success: var(--miro-success);
+
+  --color-text-primary:   var(--color-ink);
+  --color-text-secondary: var(--color-charcoal);
+  --color-text-tertiary:  var(--color-steel);
+  --color-text-muted:     var(--color-muted);
+  --color-text-dim:       var(--color-charcoal);
+  --color-text-link:      var(--miro-blue);
+  --color-text-link-hover:var(--miro-blue-pressed);
+  --color-text-inverse:   var(--color-on-primary);
+
+  --color-secondary:      #27272a;
+  --color-secondary-dark: var(--color-canvas);
+  --color-secondary-light:var(--color-surface-soft);
+
+  --color-accent:         var(--miro-blue);
+  --color-accent-dark:    #5e69d1;
+  --color-accent-light:   #828fff;
+
+  --color-success:        var(--miro-success);
+  --color-success-dark:   #1e8735;
+  --color-success-light:  var(--miro-mint);
+  --color-warning:        #F59E0B;
+  --color-warning-dark:   #D97706;
+  --color-warning-light:  #fbbf24;
+  --color-error:          var(--miro-red-dark);
+  --color-error-dark:      #dc2626;
+  --color-error-light:     #f87171;
+  --color-danger:         var(--miro-red-dark);
+  --color-info:           var(--miro-blue);
+
+  --color-neutral-50:     #FFFFFF;
+  --color-neutral-100:    #F7F8F8;
+  --color-neutral-200:    #D0D6E0;
+  --color-neutral-300:    #8A8F98;
+  --color-neutral-400:    #62666D;
+  --color-neutral-500:    #3E3E44;
+  --color-neutral-600:    #34343A;
+  --color-neutral-700:    #23252A;
+  --color-neutral-800:    #191A1B;
+  --color-neutral-900:    #141516;
+  --color-neutral-950:    #0F1011;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * TYPOGRAPHY — Miro hierarchy (design.md §Typography)
+   * Font: Inter (closest available to Roobert PRO)
+   * ═══════════════════════════════════════════════════════════════════════ */
+  --font-family-base:      "Inter", "Noto Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-heading:   "Inter Display", "Inter", sans-serif;
+  --font-family-mono:      "JetBrains Mono", "Inter", monospace;
+
+  /* Type scale */
+  --type-hero-display:     80px;
+  --type-display-lg:       60px;
+  --type-h1:               48px;
+  --type-h2:               36px;
+  --type-h3:               28px;
+  --type-h4:               22px;
+  --type-h5:               18px;
+  --type-subtitle:         18px;
+  --type-body-md:          16px;
+  --type-body-sm:          14px;
+  --type-caption:          13px;
+  --type-micro:            12px;
+  --type-micro-upper:      11px;
+  --type-button:           14px;
+  --type-stat:             64px;
+
+  /* Legacy font size aliases */
+  --font-size-xs:   0.75rem;
+  --font-size-sm:   0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg:   1.125rem;
+  --font-size-xl:   1.25rem;
+  --font-size-2xl:  1.5rem;
+  --font-size-3xl:  1.875rem;
+  --font-size-4xl:  2.25rem;
+  --font-size-5xl:  3rem;
+
+  /* Font weights — Miro uses 400/500/600 only */
+  --font-weight-normal:   400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     600; /* alias */
+  --font-weight-light:    300;
+  --font-weight-extrabold:600;
+
+  /* Line heights */
+  --lh-hero:    1.05;
+  --lh-display: 1.10;
+  --lh-h1:      1.15;
+  --lh-h2:      1.20;
+  --lh-h3:      1.25;
+  --lh-h4:      1.30;
+  --lh-body:    1.50;
+  --lh-caption: 1.40;
+  --line-height-tight:   1.25;
+  --line-height-snug:    1.375;
+  --line-height-normal:  1.5;
+  --line-height-relaxed: 1.75;
+  --line-height-loose:   2;
+
+  /* Letter spacing — negative for large display sizes */
+  --ls-hero:    -2px;
+  --ls-display: -1.5px;
+  --ls-h1:      -1px;
+  --ls-h2:      -0.5px;
+  --ls-micro-upper: 0.5px;
+  --letter-spacing-tighter: -0.05em;
+  --letter-spacing-tight:   -0.025em;
+  --letter-spacing-normal:  0;
+  --letter-spacing-wide:    0.025em;
+  --letter-spacing-wider:   0.05em;
+  --letter-spacing-widest:  0.1em;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * SPACING SCALE — design.md §Spacing (base unit: 4px)
+   * ═══════════════════════════════════════════════════════════════════════ */
+  --spacing-xxs:        4px;
+  --spacing-xs:         8px;
+  --spacing-sm:         12px;
+  --spacing-md:         16px;
+  --spacing-lg:         20px;
+  --spacing-xl:         24px;
+  --spacing-xxl:        32px;
+  --spacing-xxxl:       40px;
+  --spacing-section-sm: 48px;
+  --spacing-section:    64px;
+  --spacing-section-lg: 96px;
+  --spacing-hero:       120px;
+
+  /* Legacy aliases */
+  --spacing-0:  0;
+  --spacing-1:  0.25rem;
+  --spacing-2:  0.5rem;
+  --spacing-3:  0.75rem;
+  --spacing-4:  1rem;
+  --spacing-5:  1.25rem;
+  --spacing-6:  1.5rem;
+  --spacing-7:  1.75rem;
+  --spacing-8:  2rem;
+  --spacing-10: 2.5rem;
+  --spacing-12: 3rem;
+  --spacing-14: 3.5rem;
+  --spacing-16: 4rem;
+  --spacing-20: 5rem;
+  --spacing-24: 6rem;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * BORDER RADIUS — design.md §Shapes
+   * ═══════════════════════════════════════════════════════════════════════ */
+  --rounded-xs:      4px;    /* small chips, micro-controls */
+  --rounded-sm:      6px;    /* discount badges */
+  --rounded-md:      8px;    /* inputs, search pill */
+  --rounded-lg:      12px;   /* standard cards, table containers */
+  --rounded-xl:      16px;   /* pricing cards, feature panels */
+  --rounded-xxl:     20px;   /* larger feature cards */
+  --rounded-xxxl:    28px;   /* pastel feature cards */
+  --rounded-feature: 32px;   /* hero CTA banner cards */
+  --rounded-full:    9999px; /* ALL buttons, pill tabs, badges — brand signature */
+
+  /* Legacy aliases */
+  --radius-none: 0;
+  --radius-sm:   6px;
+  --radius-md:   8px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  20px;
+  --radius-full: 9999px;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * ELEVATION — design.md §Elevation (flat-first, dark-adapted)
+   * ═══════════════════════════════════════════════════════════════════════ */
+  --shadow-none:   none;
+  --shadow-sm:     rgba(5, 0, 56, 0.04) 0px 1px 2px 0px;
+  --shadow-md:     rgba(5, 0, 56, 0.06) 0px 4px 12px 0px;
+  --shadow-lg:     rgba(5, 0, 56, 0.08) 0px 12px 32px -4px;
+  --shadow-xl:     rgba(5, 0, 56, 0.12) 0px 16px 48px -8px;
+  --shadow-2xl:    0 25px 50px -12px rgba(0,0,0,0.4);
+  --shadow-inner:  inset 0 2px 4px 0 rgba(0,0,0,0.12);
+  --shadow-glow-cyan:     0 0 0 1px rgba(94, 106, 210, 0.20);
+  --shadow-glow-cyan-lg:  0 0 0 2px rgba(94, 106, 210, 0.30);
+  --shadow-glow-green:    0 0 0 1px rgba(39, 166, 68, 0.20);
+  --shadow-glow-green-lg: 0 0 0 2px rgba(39, 166, 68, 0.30);
+  --shadow-glow-orange:   0 0 0 1px rgba(245, 158, 11, 0.20);
+  --shadow-glow-red:      0 0 0 1px rgba(239, 68, 68, 0.20);
+
+  /* ═══════════════════════════════════════════════════════════════════════
+   * ANIMATIONS — design.md §Known Gaps: 150-200ms ease
+   * ═══════════════════════════════════════════════════════════════════════ */
+  --duration-instant: 0ms;
+  --duration-fast:    100ms;
+  --duration-normal:  200ms;
+  --duration-slow:    300ms;
+  --duration-slower:  500ms;
+
+  --ease-linear:  linear;
+  --ease-in:      cubic-bezier(0.4, 0, 1, 1);
+  --ease-out:     cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out:  cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Breakpoints */
+  --breakpoint-sm:  640px;
+  --breakpoint-md:  768px;
+  --breakpoint-lg:  1024px;
+  --breakpoint-xl:  1280px;
+  --breakpoint-2xl: 1536px;
+
+  /* Z-index */
+  --z-index-base:           0;
+  --z-index-dropdown:    1000;
+  --z-index-sticky:      1020;
+  --z-index-fixed:       1030;
+  --z-index-modal-backdrop: 1040;
+  --z-index-modal:       1050;
+  --z-index-popover:     1060;
+  --z-index-tooltip:     1070;
+  --z-index-toast:       1080;
+
+  /* Focus ring */
+  --focus-ring-width:  1px;
+  --focus-ring-offset: 2px;
+  --focus-ring-color:  var(--miro-blue);
+
+  --touch-target-min: 44px;
+
+  --transition-base:   all var(--duration-normal) var(--ease-out);
+  --transition-colors: color var(--duration-fast) var(--ease-out),
+                       background-color var(--duration-fast) var(--ease-out),
+                       border-color var(--duration-fast) var(--ease-out);
+  --transition-transform: transform var(--duration-normal) var(--ease-out);
+  --transition-opacity:   opacity var(--duration-fast) var(--ease-out);
+}
+
+/* Force dark mode always */
+[data-theme="light"] {
+  --color-canvas:         #010102;
+  --color-surface:        #0F1011;
+  --color-hairline:       #23252A;
+  --color-ink:            #F7F8F8;
+  --color-bg-primary:     #010102;
+  --color-text-primary:   #F7F8F8;
+  --color-border:         #23252A;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast:   0ms;
+    --duration-normal: 0ms;
+    --duration-slow:   0ms;
+    --duration-slower: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -4,6 +4,7 @@ Fetches stock data from Yahoo Finance with .JK suffix for IDX stocks.
 """
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -135,6 +136,10 @@ class YahooFinanceSource:
                 "dividend_yield": info.get("dividendYield"),
                 "eps": info.get("trailingEps"),
                 "beta": info.get("beta"),
+                "roe": info.get("returnOnEquity") * 100.0 if info.get("returnOnEquity") is not None else None,
+                "debt_to_equity": info.get("debtToEquity") / 100.0 if info.get("debtToEquity") is not None else None,
+                "profit_margin": info.get("profitMargins") * 100.0 if info.get("profitMargins") is not None else None,
+                "revenue_growth": info.get("revenueGrowth") if info.get("revenueGrowth") is not None else None,
                 "website": info.get("website"),
                 "description": info.get("longBusinessSummary", ""),
             }
@@ -248,7 +253,7 @@ class YahooFinanceSource:
             return None
 
     def get_multiple_prices(self, symbols: list[str]) -> dict[str, dict[str, Any]]:
-        """Get current prices for multiple stocks.
+        """Get current prices for multiple stocks concurrently.
 
         Args:
             symbols: List of stock symbols
@@ -256,11 +261,20 @@ class YahooFinanceSource:
         Returns:
             Dictionary mapping symbols to price data
         """
-        results = {}
-        for symbol in symbols:
-            price_data = self.get_current_price(symbol)
-            if price_data:
-                results[self._clean_symbol(symbol)] = price_data
+        if not symbols:
+            return {}
+        results: dict[str, dict[str, Any]] = {}
+        max_workers = min(10, len(symbols))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(self.get_current_price, sym): sym for sym in symbols}
+            for future in as_completed(futures):
+                sym = futures[future]
+                try:
+                    price_data = future.result()
+                    if price_data:
+                        results[self._clean_symbol(sym)] = price_data
+                except Exception as e:
+                    logger.debug(f"Error fetching price for {sym}: {e}")
         return results
 
     def get_dividends(self, symbol: str) -> pd.DataFrame:

@@ -1,10 +1,13 @@
 """Position Sizing Module.
 
-Implements the 2% risk rule used by professional traders:
+Implements the 1-2% risk rule used by professional traders:
 - Never risk more than 2% of capital on a single trade
 - Automatically calculates position size based on stop-loss distance
 - Adapts for small capital (IDX lot size = 100 shares)
+- Dynamic sizing based on signal grade (A+/A/B) and market regime
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
@@ -16,8 +19,14 @@ logger = logging.getLogger(__name__)
 # Indonesian stock market constants
 SHARES_PER_LOT = 100
 MIN_LOTS = 1
-DEFAULT_BROKER_FEE = 0.0015  # 0.15%
-DEFAULT_TAX_RATE = 0.001  # 0.1% on sell
+
+# Real BEI fee rates (matching backtest engine)
+BEI_BUY_FEE_PCT = 0.0019   # 0.19% buy
+BEI_SELL_FEE_PCT = 0.0029  # 0.29% sell (incl. PPh 0.1%)
+
+# Kept for backward compatibility
+DEFAULT_BROKER_FEE = BEI_BUY_FEE_PCT
+DEFAULT_TAX_RATE = 0.001  # 0.1% on sell (PPh)
 
 
 @dataclass
@@ -292,3 +301,73 @@ def quick_position_size(
         target_price=target_price,
         symbol=symbol,
     )
+
+
+def calculate_dynamic_position_size(
+    capital: float,
+    entry_price: float,
+    stop_loss_price: float,
+    target_price: float | None = None,
+    symbol: str = "",
+    grade: str = "A",
+    regime: Any = "NEUTRAL",
+    max_risk_percent: float = 2.0,
+    max_position_percent: float = 20.0,
+    broker_fee: float = DEFAULT_BROKER_FEE,
+    tax_rate: float = DEFAULT_TAX_RATE,
+) -> PositionSize:
+    """Calculate dynamic position size based on signal grade and market regime.
+
+    Risk per trade is adjusted based on:
+    - Grade A+ → 100% of risk limit
+    - Grade A  → 75% of risk limit
+    - Grade B  → 50% of risk limit
+
+    Regime:
+    - BEAR → reduce risk and position size by 50% (half size)
+    - VOLATILE → reduce risk and position size by 25% (75% size)
+    - BULL/NEUTRAL → 100% size
+    """
+    from stockai.core.regime import MarketRegime
+
+    # Resolve regime
+    if isinstance(regime, str):
+        try:
+            reg_enum = MarketRegime(regime.upper())
+        except ValueError:
+            reg_enum = MarketRegime.NEUTRAL
+    else:
+        reg_enum = regime
+
+    # Grade multiplier
+    grade_mult = {
+        "A+": 1.0,
+        "A": 0.75,
+        "B": 0.50,
+    }.get(grade.upper(), 0.75)
+
+    # Regime multiplier
+    regime_mult = {
+        MarketRegime.BULL: 1.0,
+        MarketRegime.NEUTRAL: 1.0,
+        MarketRegime.BEAR: 0.5,
+        MarketRegime.VOLATILE: 0.75,
+    }.get(reg_enum, 1.0)
+
+    # Combined multiplier
+    mult = grade_mult * regime_mult
+    adj_risk = max_risk_percent * mult
+    adj_pos = max_position_percent * mult
+
+    return calculate_position_size(
+        capital=capital,
+        entry_price=entry_price,
+        stop_loss_price=stop_loss_price,
+        target_price=target_price,
+        symbol=symbol,
+        max_risk_percent=adj_risk,
+        max_position_percent=adj_pos,
+        broker_fee=broker_fee,
+        tax_rate=tax_rate,
+    )
+

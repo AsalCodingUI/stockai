@@ -235,7 +235,7 @@ class AIValidator:
         """
         # Use sync run() wrapped in executor for now
         # TODO: Use async arun() when fully implemented
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None, lambda: self.orchestrator.run(query, symbol)
         )
@@ -346,8 +346,8 @@ class AIValidator:
 
 
 def create_validator(
-    buy_threshold: float = 6.0,
-    sell_threshold: float = 5.0,
+    buy_threshold: float = 5.0,
+    sell_threshold: float = 4.0,
     max_concurrent: int = 3,
 ) -> AIValidator:
     """Create an AI validator with custom configuration.

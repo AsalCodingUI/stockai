@@ -397,3 +397,53 @@ class AutopilotValidation(Base):
     def __repr__(self) -> str:
         status = "APPROVED" if self.is_approved else "REJECTED"
         return f"<AutopilotValidation(symbol='{self.symbol}', {status})>"
+
+
+class TradePlan(Base):
+    __tablename__ = "trade_plans"
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(10), nullable=False, index=True)
+    tujuan = Column(String(10), nullable=False, default="swing")  # scalp/swing/invest
+    modal = Column(Float, nullable=False, default=5_000_000)
+    entry_low = Column(Float, nullable=False)
+    entry_high = Column(Float, nullable=False)
+    stop_loss = Column(Float, nullable=False)
+    tp1 = Column(Float, nullable=False)
+    tp2 = Column(Float)
+    tp3 = Column(Float)
+    risk_reward = Column(Float)
+    status = Column(String(20), nullable=False, default="OPEN", index=True)
+    # OPEN | TP1_HIT | TP2_HIT | TP3_HIT | SL_HIT | CANCELLED | EXPIRED
+    notes = Column(Text)
+    ai_summary = Column(Text)          # snapshot of AI reasoning when plan was set
+    entry_price_actual = Column(Float) # filled when entry confirmed
+    exit_price = Column(Float)         # filled when outcome determined
+    exit_date = Column(DateTime)
+    pnl_pct = Column(Float)            # realized % gain/loss
+    days_held = Column(Integer)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    outcomes = relationship("TradeOutcome", back_populates="plan", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<TradePlan(symbol='{self.symbol}', tujuan='{self.tujuan}', status='{self.status}')>"
+
+
+class TradeOutcome(Base):
+    __tablename__ = "trade_outcomes"
+
+    id = Column(Integer, primary_key=True)
+    plan_id = Column(Integer, ForeignKey("trade_plans.id"), nullable=False, index=True)
+    checked_at = Column(DateTime, default=datetime.utcnow)
+    price_at_check = Column(Float, nullable=False)
+    outcome = Column(String(30), nullable=False)
+    # OPEN | ENTRY_ZONE | TP1_HIT | TP2_HIT | TP3_HIT | SL_HIT | ABOVE_TP | BELOW_SL
+    pnl_pct = Column(Float)
+    notes = Column(Text)
+
+    plan = relationship("TradePlan", back_populates="outcomes")
+
+    def __repr__(self) -> str:
+        return f"<TradeOutcome(plan_id={self.plan_id}, outcome='{self.outcome}', price={self.price_at_check})>"

@@ -4,54 +4,148 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}StockAI{% endblock %}</title>
+    <!-- Google Fonts: Inter Display + Inter + JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter+Display:wght@400;500;600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Design System Foundation (Miro DNA × Dark) -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/design-system.css') }}">
+
+    <!-- Tailwind CSS - CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        "bg-primary": "#0a0a0f",
-                        "bg-card": "#111118",
-                        "neon-green": "#00ff88",
-                        "neon-cyan": "#00d4ff",
+                        /* Miro brand palette adapted for dark */
+                        "canvas":        "#010102",
+                        "surface":       "#0F1011",
+                        "surface-soft":  "#141516",
+                        "hairline":      "#23252A",
+                        "hairline-soft": "#1C1D21",
+                        "hairline-strong":"#34343A",
+                        /* Miro brand */
+                        "miro-yellow":   "#FFD02F",
+                        "miro-blue":     "#5E6AD2",
+                        "miro-coral":    "#E8735A",
+                        "miro-teal":     "#2CB5A0",
+                        "miro-rose":     "#D4648A",
+                        "miro-success":  "#27A644",
+                        /* Text scale */
+                        "ink":           "#F7F8F8",
+                        "charcoal":      "#D0D6E0",
+                        "slate":         "#A0A8B4",
+                        "steel":         "#8A8F98",
+                        "muted":         "#62666D",
+                        /* Legacy aliases */
+                        "bg-primary":    "#010102",
+                        "bg-card":       "#0F1011",
+                        "bg-card-hover": "#141516",
+                        "border":        "#23252A",
+                        "border-bright": "#34343A",
+                        "green":         "#27A644",
+                        "cyan":          "#5E6AD2",
+                        "primary":       "#5E6AD2",
+                        "secondary":     "#0F1011",
+                        "text-primary":  "#F7F8F8",
+                        "text-secondary":"#8A8F98",
+                    },
+                    fontFamily: {
+                        sans:    ['"Inter"', '"Noto Sans"', 'sans-serif'],
+                        display: ['"Inter Display"', '"Inter"', 'sans-serif'],
+                        mono:    ['"JetBrains Mono"', '"Inter"', 'monospace'],
+                    },
+                    borderRadius: {
+                        /* Miro radius scale */
+                        'xs':      '4px',
+                        'sm':      '6px',
+                        'md':      '8px',
+                        'lg':      '12px',
+                        'xl':      '16px',
+                        'xxl':     '20px',
+                        'xxxl':    '28px',
+                        'feature': '32px',
+                        'full':    '9999px',
                     }
                 }
             }
         };
     </script>
+
+    <!-- Custom Utilities -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/utilities.css') }}">
+
+    <!-- Application Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Alpine.js for reactive components -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Chart Libraries -->
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Base Styles -->
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         body {
-            background: #0a0a0f;
-            color: #e2e8f0;
-            font-family: "JetBrains Mono", monospace;
+            background: var(--color-canvas);
+            color: var(--color-ink);
+            font-family: var(--font-family-base);
             min-height: 100vh;
         }
+        /* Scrollbar — thin, hairline-colored */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: var(--color-surface); }
+        ::-webkit-scrollbar-thumb { background: var(--color-hairline-strong); border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--color-steel); }
     </style>
-    <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 <body x-data="{ now: new Date().toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'}) }" class="app-body">
     <div class="app-layout">
+        <!-- Sidebar -->
         <aside class="sidebar">
-            <a href="/" class="brand">⬡ STOCKAI</a>
+            <!-- Brand / Wordmark — canary yellow (design.md: yellow only for wordmark) -->
+            <a href="/" class="brand">
+                <i class="ph ph-hexagon-fill text-xl"></i>
+                STOCKAI
+            </a>
             <nav class="side-nav">
-                <a href="/" class="side-link">🏠 Dashboard</a>
-                <a href="/scan" class="side-link">🔍 Live Scan</a>
-                <a href="/coach" class="side-link">🎯 Entry Coach</a>
-                <a href="/backtest" class="side-link">📊 Backtest</a>
-                <a href="/portfolio" class="side-link">💼 Portfolio</a>
-                <a href="/alerts" class="side-link">🔔 Alerts</a>
-                <a href="/api/docs" target="_blank" class="side-link">📚 API Docs</a>
+                <a href="/" class="side-link flex items-center gap-2">
+                    <i class="ph ph-squares-four text-sm"></i>
+                    Dashboard
+                </a>
+                <a href="/coach" class="side-link flex items-center gap-2">
+                    <i class="ph ph-target text-sm"></i>
+                    AI Entry Coach
+                </a>
+                <a href="/journal" class="side-link flex items-center gap-2">
+                    <i class="ph ph-chart-line text-sm"></i>
+                    Signal Performance
+                </a>
+                <a href="/alerts" class="side-link flex items-center gap-2">
+                    <i class="ph ph-bell text-sm"></i>
+                    Alerts Feed
+                </a>
             </nav>
         </aside>
+
+        <!-- Main Panel -->
         <main class="main-panel">
+            <!-- Topbar -->
             <header class="topbar">
                 <div class="topbar-title">{{ title | default("StockAI Dashboard") }}</div>
+                <!-- Search pill -->
                 <div class="search-container" style="position:relative;display:flex;align-items:center;">
                     <input
                         id="global-search"
@@ -60,59 +154,75 @@
                         autocomplete="off"
                         style="
                             width: 280px;
-                            padding: 6px 80px 6px 32px;
-                            border-radius: 8px;
-                            border: 1px solid #334155;
-                            background: #1e293b;
-                            color: #f1f5f9;
+                            padding: 8px 76px 8px 34px;
+                            border-radius: var(--rounded-md);
+                            border: 1px solid var(--color-hairline);
+                            background: var(--color-surface);
+                            color: var(--color-ink);
                             font-size: 13px;
+                            height: 40px;
                             outline: none;
+                            transition: border-color var(--duration-fast) var(--ease-out);
                         "
+                        onfocus="this.style.borderColor='var(--color-hairline-strong)'"
+                        onblur="this.style.borderColor='var(--color-hairline)'"
                     />
-                    <span style="
+                    <i class="ph ph-magnifying-glass" style="
                         position:absolute;
-                        left:10px;
-                        color:#475569;
-                        font-size:13px;
+                        left:11px;
+                        color: var(--color-steel);
+                        font-size:14px;
                         pointer-events:none;
-                    ">🔍</span>
+                    "></i>
                     <span
                         id="search-shortcut-badge"
                         class="search-kbd"
-                        style="position:absolute;right:8px;"
+                        style="
+                            position:absolute;
+                            right:8px;
+                            background: var(--color-surface-soft);
+                            border: 1px solid var(--color-hairline);
+                            padding: 2px 6px;
+                            border-radius: var(--rounded-xs);
+                            font-size: 10px;
+                            color: var(--color-steel);
+                            font-family: var(--font-family-mono);
+                        "
                     >⌘K</span>
                     <div
                         id="search-dropdown"
                         style="
                             display: none;
                             position: absolute;
-                            top: 36px;
+                            top: 44px;
                             left: 0;
                             width: 100%;
-                            background: #1e293b;
-                            border: 1px solid #334155;
-                            border-radius: 8px;
+                            background: var(--color-surface);
+                            border: 1px solid var(--color-hairline-strong);
+                            border-radius: var(--rounded-lg);
                             z-index: 1000;
                             max-height: 320px;
                             overflow-y: auto;
-                            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+                            box-shadow: var(--shadow-xl);
                         "
                     ></div>
                 </div>
+                <!-- Status bar -->
                 <div class="topbar-status">
-                    <span id="next-scan-indicator" class="text-muted">⏱ Next scan: -</span>
+                    <span id="next-scan-indicator" style="color:var(--color-steel)">⏱ Next scan: -</span>
                     <span class="live-dot"></span>
-                    <span>LIVE</span>
-                    <span x-text="now"></span>
+                    <span style="font-weight:500;color:var(--color-charcoal);font-size:11px;">LIVE</span>
+                    <span x-text="now" style="font-family:var(--font-family-mono)"></span>
                 </div>
             </header>
+
             <section class="content-shell">
                 {% block content %}{% endblock %}
             </section>
         </main>
     </div>
 
-    <script src="{{ url_for('static', path='js/app.js') }}"></script>
+    <script src="{{ url_for('static', path='js/app.js') }}?v=2"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

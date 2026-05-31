@@ -4,11 +4,16 @@ Uses Google's Gemini LLM for financial sentiment analysis,
 following the dexter project pattern for financial research.
 """
 
+import concurrent.futures
 import json
 import logging
+import threading
 from typing import Any
 
 from stockai.config import get_settings
+
+# Rate limiter: max concurrent Gemini calls (applies to batch processing)
+_rate_semaphore = threading.Semaphore(5)
 from stockai.core.sentiment.models import (
     AggregatedSentiment,
     NewsArticle,
@@ -39,6 +44,7 @@ def _get_gemini_llm():
                 google_api_key=settings.google_api_key,
                 temperature=0.1,  # Low temperature for consistent analysis
                 max_output_tokens=500,
+                request_timeout=settings.llm_timeout,
             )
             logger.info("Loaded Gemini LLM for sentiment analysis")
         except Exception as e:
@@ -161,7 +167,14 @@ class GeminiSentimentAnalyzer:
                 symbol=symbol,
             )
 
-            response = llm.invoke(prompt)
+            settings = get_settings()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(llm.invoke, prompt)
+                try:
+                    response = future.result(timeout=settings.llm_timeout)
+                except concurrent.futures.TimeoutError:
+                    logger.warning(f"Gemini API call timed out after {settings.llm_timeout}s, using fallback")
+                    return self._get_fallback_analyzer().analyze(text)
             parsed = self._parse_llm_response(response.content)
 
             if parsed is None:
@@ -214,7 +227,12 @@ class GeminiSentimentAnalyzer:
         Returns:
             List of SentimentResult
         """
-        return [self.analyze(text, symbol) for text in texts]
+        def _analyze_with_rate_limit(text: str) -> SentimentResult:
+            with _rate_semaphore:
+                return self.analyze(text, symbol)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            return list(executor.map(_analyze_with_rate_limit, texts))
 
     def analyze_articles(
         self,

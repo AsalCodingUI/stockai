@@ -2,28 +2,33 @@
 
 {% block title %}Sentiment Analysis - StockAI{% endblock %}
 
+{% block extra_head %}
+<!-- Plotly CDN for sentiment chart -->
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-6xl mx-auto">
+<div class="max-w-5xl mx-auto">
     <!-- Header -->
     <div class="mb-6">
-        <h1 class="text-3xl font-bold">Sentiment Analysis</h1>
-        <p class="text-gray-600">AI-powered news sentiment analysis for Indonesian stocks</p>
+        <h1 class="text-xl font-semibold tracking-tight">Sentiment Analysis</h1>
+        <p class="text-muted text-xs mt-1">AI-powered news sentiment analysis for Indonesian stocks</p>
     </div>
 
     <!-- Search Form -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-        <form id="sentiment-form" class="flex gap-4">
-            <input type="text" id="symbol-input" placeholder="Enter stock symbol (e.g., BBCA)"
-                   class="flex-1 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 uppercase"
+    <div class="card mb-6">
+        <form id="sentiment-form" class="flex gap-3">
+            <input type="text" id="symbol-input" placeholder="Masukkan kode saham (e.g., BBCA)"
+                   class="flex-1 px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-50 outline-none focus:border-zinc-500 transition-colors uppercase"
                    maxlength="10">
-            <select id="days-select" class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                <option value="3">Last 3 days</option>
-                <option value="7" selected>Last 7 days</option>
-                <option value="14">Last 14 days</option>
-                <option value="30">Last 30 days</option>
+            <select id="days-select" class="px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-50 outline-none focus:border-zinc-500 transition-colors">
+                <option value="3">3 Hari Terakhir</option>
+                <option value="7" selected>7 Hari Terakhir</option>
+                <option value="14">14 Hari Terakhir</option>
+                <option value="30">30 Hari Terakhir</option>
             </select>
-            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                Analyze
+            <button type="submit" class="px-4 py-1.5 bg-zinc-50 hover:bg-zinc-200 text-zinc-950 rounded-md text-xs font-semibold transition">
+                Analisa
             </button>
         </form>
     </div>
@@ -31,47 +36,49 @@
     <!-- Results Section -->
     <div id="results-section" class="hidden">
         <!-- Sentiment Summary -->
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 class="text-xl font-bold mb-4">Sentiment Summary</h2>
+        <div class="card mb-6">
+            <div class="section-title mb-4">Sentiment Summary</div>
             <div class="grid md:grid-cols-4 gap-4">
-                <div class="text-center p-4 bg-gray-50 rounded">
-                    <div class="text-3xl font-bold" id="sentiment-score">-</div>
-                    <div class="text-gray-500">Sentiment Score</div>
+                <div class="text-center p-4 bg-zinc-900 border border-zinc-800 rounded-md">
+                    <div class="text-2xl font-bold font-mono" id="sentiment-score">-</div>
+                    <div class="text-muted text-[10px] uppercase font-semibold tracking-wider mt-1">Sentiment Score</div>
                 </div>
-                <div class="text-center p-4 bg-gray-50 rounded">
-                    <div class="text-2xl font-semibold" id="sentiment-label">-</div>
-                    <div class="text-gray-500">Overall Sentiment</div>
+                <div class="text-center p-4 bg-zinc-900 border border-zinc-800 rounded-md">
+                    <div class="text-lg font-semibold" id="sentiment-label">-</div>
+                    <div class="text-muted text-[10px] uppercase font-semibold tracking-wider mt-1">Overall Sentiment</div>
                 </div>
-                <div class="text-center p-4 bg-gray-50 rounded">
-                    <div class="text-2xl font-semibold" id="article-count">-</div>
-                    <div class="text-gray-500">Articles Analyzed</div>
+                <div class="text-center p-4 bg-zinc-900 border border-zinc-800 rounded-md">
+                    <div class="text-lg font-semibold font-mono" id="article-count">-</div>
+                    <div class="text-muted text-[10px] uppercase font-semibold tracking-wider mt-1">Articles Analyzed</div>
                 </div>
-                <div class="text-center p-4 bg-gray-50 rounded">
-                    <div class="text-2xl font-semibold" id="confidence">-</div>
-                    <div class="text-gray-500">Confidence</div>
+                <div class="text-center p-4 bg-zinc-900 border border-zinc-800 rounded-md">
+                    <div class="text-lg font-semibold font-mono" id="confidence">-</div>
+                    <div class="text-muted text-[10px] uppercase font-semibold tracking-wider mt-1">Confidence</div>
                 </div>
             </div>
         </div>
 
         <!-- Sentiment Distribution -->
         <div class="grid md:grid-cols-2 gap-6 mb-6">
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-bold mb-4">Sentiment Distribution</h2>
+            <div class="card">
+                <div class="section-title mb-4">Sentiment Distribution</div>
                 <div id="distribution-chart" style="height: 250px;"></div>
             </div>
 
-            <div class="bg-white rounded-lg shadow-md p-6">
-                <h2 class="text-xl font-bold mb-4">Signal Strength</h2>
+            <div class="card flex flex-col justify-between">
+                <div>
+                    <div class="section-title mb-4">Signal Strength</div>
+                </div>
                 <div id="signal-content" class="text-center py-8">
-                    <div class="text-4xl font-bold mb-2" id="signal-strength">-</div>
-                    <div class="text-gray-500" id="signal-description">-</div>
+                    <div class="text-3xl font-bold font-mono mb-2" id="signal-strength">-</div>
+                    <div class="text-muted text-xs" id="signal-description">-</div>
                 </div>
             </div>
         </div>
 
         <!-- News Articles -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-bold mb-4">Recent News</h2>
+        <div class="card">
+            <div class="section-title mb-4">Recent News</div>
             <div id="articles-list" class="space-y-4">
                 <!-- Articles will be loaded here -->
             </div>
@@ -81,19 +88,19 @@
     <!-- Loading State -->
     <div id="loading-state" class="hidden text-center py-12">
         <div class="loader mx-auto"></div>
-        <p class="mt-4 text-gray-600">Analyzing news sentiment...</p>
+        <p class="mt-4 text-muted text-xs font-mono">Analyzing news sentiment...</p>
     </div>
 
     <!-- Empty State -->
     <div id="empty-state" class="text-center py-12">
-        <div class="text-5xl mb-4">📰</div>
-        <p class="text-gray-600">Enter a stock symbol above to analyze news sentiment.</p>
+        <div class="text-4xl mb-3">📰</div>
+        <p class="text-muted text-xs">Enter a stock symbol above to analyze news sentiment.</p>
     </div>
 
     <!-- Error State -->
     <div id="error-state" class="hidden text-center py-12">
-        <div class="text-5xl mb-4">⚠️</div>
-        <p class="text-red-600" id="error-message">An error occurred.</p>
+        <div class="text-4xl mb-3">⚠️</div>
+        <p class="text-red-500 text-xs font-mono" id="error-message">An error occurred.</p>
     </div>
 </div>
 
@@ -120,7 +127,7 @@ function showState(state) {
 
 function createArticleElement(article) {
     const div = document.createElement('div');
-    div.className = 'border-b pb-4 last:border-b-0';
+    div.className = 'border-b border-zinc-850 pb-4 last:border-b-0 last:pb-0';
 
     const header = document.createElement('div');
     header.className = 'flex justify-between items-start mb-2';
@@ -129,25 +136,30 @@ function createArticleElement(article) {
     titleLink.href = article.url || '#';
     titleLink.target = '_blank';
     titleLink.rel = 'noopener noreferrer';
-    titleLink.className = 'font-medium text-blue-600 hover:underline';
+    titleLink.className = 'font-semibold text-xs text-zinc-100 hover:text-zinc-300 hover:underline leading-snug';
     titleLink.textContent = article.title || 'Untitled';
 
     const sentimentBadge = document.createElement('span');
-    const sentimentClass = article.sentiment === 'BULLISH' ? 'bg-green-100 text-green-800' :
-                          article.sentiment === 'BEARISH' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800';
-    sentimentBadge.className = 'px-2 py-1 text-xs rounded ' + sentimentClass;
+    let sentimentClass = '';
+    if (article.sentiment === 'BULLISH') {
+        sentimentClass = 'badge-ready';
+    } else if (article.sentiment === 'BEARISH') {
+        sentimentClass = 'badge-rejected';
+    } else {
+        sentimentClass = 'badge-watch';
+    }
+    sentimentBadge.className = 'badge ml-4 shrink-0 ' + sentimentClass;
     sentimentBadge.textContent = article.sentiment || 'NEUTRAL';
 
     header.appendChild(titleLink);
     header.appendChild(sentimentBadge);
 
     const meta = document.createElement('div');
-    meta.className = 'text-sm text-gray-500';
+    meta.className = 'text-[10px] text-zinc-500 font-mono';
     meta.textContent = (article.source || 'Unknown') + ' • ' + (article.published_date || 'Unknown date');
 
     const summary = document.createElement('p');
-    summary.className = 'text-gray-600 text-sm mt-1';
+    summary.className = 'text-zinc-400 text-xs mt-2 leading-relaxed';
     summary.textContent = article.summary || '';
 
     div.appendChild(header);
@@ -175,13 +187,13 @@ async function analyzeSentiment(symbol, days) {
         // Update summary
         const scoreEl = document.getElementById('sentiment-score');
         scoreEl.textContent = (data.avg_sentiment_score >= 0 ? '+' : '') + data.avg_sentiment_score.toFixed(2);
-        scoreEl.className = 'text-3xl font-bold ' + (data.avg_sentiment_score >= 0 ? 'positive' : 'negative');
+        scoreEl.className = 'text-2xl font-bold font-mono ' + (data.avg_sentiment_score >= 0 ? 'text-emerald-500' : 'text-red-500');
 
         const labelEl = document.getElementById('sentiment-label');
         labelEl.textContent = data.overall_sentiment;
-        labelEl.className = 'text-2xl font-semibold ' +
-            (data.overall_sentiment === 'BULLISH' ? 'text-green-600' :
-             data.overall_sentiment === 'BEARISH' ? 'text-red-600' : 'text-gray-600');
+        labelEl.className = 'text-base font-semibold ' +
+            (data.overall_sentiment === 'BULLISH' ? 'text-emerald-500' :
+             data.overall_sentiment === 'BEARISH' ? 'text-red-500' : 'text-zinc-400');
 
         document.getElementById('article-count').textContent = data.article_count;
         document.getElementById('confidence').textContent = (data.confidence * 100).toFixed(0) + '%';
@@ -196,21 +208,40 @@ async function analyzeSentiment(symbol, days) {
         };
         document.getElementById('signal-description').textContent = signalDescriptions[data.signal_strength] || '';
 
-        // Distribution chart
+        // Distribution chart (Dark themed styling)
         const distribution = data.sentiment_distribution || {bullish: 0, bearish: 0, neutral: 0};
         const chartData = [{
             values: [distribution.bullish || 0, distribution.bearish || 0, distribution.neutral || 0],
             labels: ['Bullish', 'Bearish', 'Neutral'],
             type: 'pie',
+            hole: 0.4,
             marker: {
-                colors: ['#10b981', '#ef4444', '#6b7280']
+                colors: ['#10b981', '#ef4444', '#3f3f46']
+            },
+            textinfo: 'percent',
+            textfont: {
+                family: 'JetBrains Mono, monospace',
+                color: '#fafafa',
+                size: 11
             }
         }];
 
         Plotly.newPlot('distribution-chart', chartData, {
             showlegend: true,
-            margin: {t: 20, b: 20, l: 20, r: 20}
-        }, {responsive: true});
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: {
+                family: 'Inter, sans-serif',
+                color: '#a1a1aa',
+                size: 11
+            },
+            legend: {
+                orientation: 'h',
+                x: 0.1,
+                y: -0.1
+            },
+            margin: {t: 10, b: 10, l: 10, r: 10}
+        }, {responsive: true, displayModeBar: false});
 
         // Articles list
         const articlesList = document.getElementById('articles-list');
@@ -224,7 +255,7 @@ async function analyzeSentiment(symbol, days) {
             });
         } else {
             const p = document.createElement('p');
-            p.className = 'text-gray-500';
+            p.className = 'text-zinc-500 text-xs font-mono';
             p.textContent = 'No article details available.';
             articlesList.appendChild(p);
         }

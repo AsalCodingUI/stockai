@@ -69,7 +69,11 @@ async def generate_unified_decision(
     return decision
 
 
-def decision_to_trade_plan(decision: CoachDecision) -> dict[str, Any]:
+def decision_to_trade_plan(
+    decision: CoachDecision,
+    min_tp: float | None = None,
+    min_cl: float | None = None,
+) -> dict[str, Any]:
     """Normalize decision fields to canonical trade plan schema."""
     tujuan = str(getattr(decision, "tujuan", "swing") or "swing").lower()
     entry_low = float(decision.entry_low or 0) or None
@@ -79,16 +83,30 @@ def decision_to_trade_plan(decision: CoachDecision) -> dict[str, Any]:
     tp2 = float(decision.target2 or 0) or None
     tp3 = (tp2 * 1.08) if tp2 else None
 
-    # Intraday/swing-harian profile: tighten targets and risk window.
-    if tujuan == "scalp" and entry_high:
-        scalp_tp1 = round(entry_high * 1.03, 2)
-        scalp_tp2 = round(entry_high * 1.06, 2)
-        scalp_tp3 = round(entry_high * 1.09, 2)
-        scalp_sl = round(entry_low * 0.98, 2) if entry_low else round(entry_high * 0.98, 2)
+    # Apply standard scalp defaults if not overridden
+    default_tp_factor = 1.03 if tujuan == "scalp" else None
+    default_sl_factor = 0.98 if tujuan == "scalp" else None
 
+    # Force minimum target take profit (min_tp)
+    if min_tp is not None and entry_high:
+        tp_factor = 1.0 + (min_tp / 100.0)
+        tp1 = round(entry_high * tp_factor, 2)
+        tp2 = round(entry_high * (1.0 + (min_tp * 2) / 100.0), 2)
+        tp3 = round(entry_high * (1.0 + (min_tp * 3) / 100.0), 2)
+    elif default_tp_factor and entry_high:
+        scalp_tp1 = round(entry_high * default_tp_factor, 2)
+        scalp_tp2 = round(entry_high * (1.0 + (default_tp_factor - 1.0) * 2), 2)
+        scalp_tp3 = round(entry_high * (1.0 + (default_tp_factor - 1.0) * 3), 2)
         tp1 = min(tp1, scalp_tp1) if tp1 else scalp_tp1
         tp2 = min(tp2, scalp_tp2) if tp2 else scalp_tp2
         tp3 = min(tp3, scalp_tp3) if tp3 else scalp_tp3
+
+    # Force minimum cut loss (min_cl)
+    if min_cl is not None and entry_high:
+        sl_factor = 1.0 - (min_cl / 100.0)
+        stop_loss = round((entry_low or entry_high) * sl_factor, 2)
+    elif default_sl_factor and entry_high:
+        scalp_sl = round(entry_low * default_sl_factor, 2) if entry_low else round(entry_high * default_sl_factor, 2)
         if stop_loss:
             stop_loss = max(stop_loss, scalp_sl)
         else:

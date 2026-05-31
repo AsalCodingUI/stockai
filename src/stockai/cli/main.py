@@ -441,8 +441,7 @@ def analyze(
     from rich.progress import Progress, SpinnerColumn, TextColumn
     from rich.markdown import Markdown
 
-    from stockai.agent import create_agent
-    from stockai.tools import get_all_tools, register_stock_tools
+    from stockai.agents import create_trading_orchestrator
     from stockai.config import get_settings
 
     symbol = symbol.upper()
@@ -454,18 +453,13 @@ def analyze(
         console.print("Set GOOGLE_API_KEY in your .env file or environment.")
         raise typer.Exit(1)
 
-    # Register tools
-    register_stock_tools()
-    tools = get_all_tools()
-
     mode = "deep" if deep else "standard"
     query = f"Analyze {symbol} stock with {'comprehensive technical and fundamental analysis' if deep else 'key metrics and current status'}"
 
     console.print(f"\n[bold]🤖 Analyzing {symbol}[/bold] ({mode} mode)\n")
 
     if verbose:
-        console.print(f"[dim]Model: {settings.model}[/dim]")
-        console.print(f"[dim]Tools: {', '.join(tools.keys())}[/dim]\n")
+        console.print(f"[dim]Model: {settings.model}[/dim]\n")
 
     try:
         with Progress(
@@ -477,28 +471,23 @@ def analyze(
             # Planning phase
             task = progress.add_task("Planning research...", total=None)
 
-            agent = create_agent(tools=tools)
+            orchestrator = create_trading_orchestrator()
 
             progress.update(task, description="Executing analysis...")
 
-            result = agent.run(query, symbol=symbol)
+            import asyncio
+            result = asyncio.run(orchestrator.analyze(query=query))
 
-        if result.get("success"):
-            answer = result.get("answer", "No analysis generated.")
+        answer = result.get("answer", "No analysis generated.")
 
-            # Display as markdown
-            console.print()
-            md = Markdown(answer)
-            console.print(md)
+        # Display as markdown
+        console.print()
+        md = Markdown(answer)
+        console.print(md)
 
-            # Show stats if verbose
-            if verbose and result.get("duration"):
-                console.print(f"\n[dim]Completed in {result['duration']:.1f}s[/dim]")
-                console.print(f"[dim]Tool calls: {len(result.get('tool_results', []))}[/dim]")
-        else:
-            error = result.get("error", "Unknown error")
-            console.print(f"[red]Analysis failed:[/red] {error}")
-            raise typer.Exit(1)
+        # Show stats if verbose
+        if verbose and result.get("duration"):
+            console.print(f"\n[dim]Completed in {result['duration']:.1f}s[/dim]")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -536,7 +525,7 @@ def quality(
     - ADX trend strength
     - 6-Gate decision filter
     - Trade plan with entry/SL/TP levels
-    - Optional AI validation
+    - Optional intelligence pipeline and focused AI validation
 
     Examples:
         stockai quality BBCA
@@ -554,6 +543,7 @@ def quality(
     from stockai.scoring.gates import GateConfig
     from stockai.scoring.trade_plan import calculate_position_with_plan
     from stockai.agents.focused_validator import FocusedValidator
+    from stockai.scoring.intelligence import run_intelligence_pipeline
 
     symbol = symbol.upper()
 
@@ -712,7 +702,59 @@ def quality(
         console.print(f"\n[bold]Decision:[/bold] [{decision_color}]{result.decision}[/{decision_color}]")
         console.print(f"[bold]Confidence:[/bold] [{confidence_color}]{result.confidence}[/{confidence_color}]")
 
-        # 7. AI Validation (if requested)
+        # 7. Intelligence pipeline (if requested)
+        if ai and result.gates.confidence in ["HIGH", "WATCH"]:
+            console.print()
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+                transient=True,
+            ) as progress:
+                task = progress.add_task("Running intelligence pipeline...", total=None)
+                intelligence = run_intelligence_pipeline(
+                    symbol,
+                    analysis_result=result,
+                    existing_score=result.composite_score,
+                    yahoo=yahoo,
+                )
+
+            breakdown_lines = [
+                f"Confidence: [bold]{intelligence.confidence_score:.1f}/100[/bold] ({intelligence.confidence_level})",
+                f"Recommendation: [bold]{intelligence.recommendation}[/bold]",
+                f"Market Regime: {intelligence.regime}",
+                f"MTF Alignment: {intelligence.mtf_aligned}/3",
+                f"Breakout Score: {intelligence.breakout_score:.1f}",
+                f"Candle Pattern: {intelligence.candle_pattern}",
+                f"Relative Strength: {intelligence.relative_strength:.2f}",
+                f"News Status: {intelligence.news_status}",
+            ]
+            if intelligence.news_risk_reason:
+                breakdown_lines.append(f"News Note: {intelligence.news_risk_reason}")
+            if intelligence.score_breakdown:
+                breakdown_lines.append("")
+                breakdown_lines.append("[bold]Score Breakdown:[/bold]")
+                for key, value in intelligence.score_breakdown.items():
+                    label = key.replace("_", " ").title()
+                    breakdown_lines.append(f"  {label}: {value:.1f}")
+
+            intel_color = {
+                "EXECUTE": "green",
+                "WATCH": "yellow",
+                "SKIP": "red",
+            }.get(intelligence.recommendation, "white")
+            console.print(
+                Panel(
+                    "\n".join(breakdown_lines),
+                    title="🧠 Intelligence",
+                    border_style=intel_color,
+                )
+            )
+
+            if intelligence.recommendation != "EXECUTE":
+                return
+
+        # 8. Focused AI validation (only after intelligence passes)
         if ai and result.gates.confidence in ["HIGH", "WATCH"]:
             console.print()
             with Progress(
@@ -723,14 +765,8 @@ def quality(
             ) as progress:
                 task = progress.add_task("Running AI validation...", total=None)
 
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-
                 validator = FocusedValidator(timeout=30.0)
-                ai_result = loop.run_until_complete(
+                ai_result = asyncio.run(
                     validator.validate(result, fundamentals=fundamentals, capital=capital)
                 )
 
@@ -1827,44 +1863,50 @@ def portfolio_list(
     """List all stocks in portfolio.
 
     Shows holdings with current values, P&L, and allocation.
-    Uses the autopilot paper trading portfolio.
 
     Examples:
-        stockai portfolio list
-        stockai portfolio list --no-prices
+        stock portfolio list
+        stock portfolio list --no-prices
     """
-    from stockai.autopilot.executor import PaperExecutor
-    from stockai.data.sources.yahoo import YahooFinanceSource
+    from stockai.data.database import init_database
+    from stockai.core.portfolio import PnLCalculator, PortfolioManager
 
-    executor = PaperExecutor()
-    executor.load_portfolio()
+    init_database()
+    manager = PortfolioManager()
+    pnl_calc = PnLCalculator()
 
-    if not executor.portfolio or not executor.portfolio.positions:
+    db_positions = manager.get_positions()
+
+    if not db_positions:
         console.print(
             Panel(
                 "[dim]No positions in portfolio.[/dim]\n\n"
-                "Start autopilot with:\n"
-                "  stockai autopilot run --capital 10000000",
+                "Add a position with:\n"
+                "  stock portfolio add BBCA 100 9500",
                 title="💼 Portfolio",
             )
         )
         return
 
-    # Update prices if requested
+    price_map = {}
     if prices:
+        from stockai.data.sources.yahoo import YahooFinanceSource
         source = YahooFinanceSource()
-        price_map = {}
-        for symbol in executor.portfolio.positions:
+        for pos in db_positions:
+            symbol = pos["symbol"]
             try:
                 info = source.get_stock_info(symbol)
                 if info:
                     price_map[symbol] = info.get("current_price") or info.get("previous_close", 0)
             except Exception:
                 pass
-        executor.update_prices(price_map)
 
-    portfolio = executor.portfolio
-    positions = portfolio.positions
+    summary = pnl_calc.get_portfolio_summary(prices=price_map)
+    positions = summary.get("positions", [])
+    total_cost = summary.get("summary", {}).get("total_cost_basis", 0.0)
+    total_value = summary.get("summary", {}).get("total_market_value", 0.0)
+    total_pnl = summary.get("summary", {}).get("total_unrealized_pnl", 0.0)
+    pnl_pct = summary.get("summary", {}).get("total_pnl_percent", 0.0)
 
     table = Table(title=f"💼 Portfolio ({len(positions)} positions)", show_header=True)
     table.add_column("Symbol", style="cyan")
@@ -1880,33 +1922,29 @@ def portfolio_list(
         table.add_column("%", justify="right")
         table.add_column("Alloc", justify="right", style="dim")
 
-    total_cost = 0
-    total_value = 0
-    total_pnl = 0
-    portfolio_value = portfolio.cash + sum(p.shares * p.current_price for p in positions.values())
-
-    for symbol, pos in positions.items():
-        cost_basis = pos.shares * pos.avg_price
-        total_cost += cost_basis
+    for pos in positions:
+        symbol = pos["symbol"]
+        cost_basis = pos["cost_basis"]
+        avg_price = pos["avg_cost"]
+        shares = pos["shares"]
+        lots = pos.get("lots", int(shares / 100))
 
         row = [
             symbol,
-            str(pos.lots),
-            f"{pos.shares:,}",
-            f"Rp {pos.avg_price:,.0f}",
+            str(lots),
+            f"{shares:,}",
+            f"Rp {avg_price:,.0f}",
             f"Rp {cost_basis:,.0f}",
         ]
 
         if prices:
-            current_value = pos.shares * pos.current_price
-            unrealized_pnl = current_value - cost_basis
-            pnl_percent = (unrealized_pnl / cost_basis * 100) if cost_basis > 0 else 0
-            allocation = (current_value / portfolio_value * 100) if portfolio_value > 0 else 0
+            current_value = pos["market_value"]
+            unrealized_pnl = pos["unrealized_pnl"]
+            pnl_percent = pos["pnl_percent"]
+            allocation = pos["allocation_percent"]
+            current_price = pos.get("current_price", avg_price)
 
-            total_value += current_value
-            total_pnl += unrealized_pnl
-
-            row.append(f"Rp {pos.current_price:,.0f}")
+            row.append(f"Rp {current_price:,.0f}")
             row.append(f"Rp {current_value:,.0f}")
 
             color = "green" if unrealized_pnl >= 0 else "red"
@@ -1919,18 +1957,14 @@ def portfolio_list(
 
     console.print(table)
 
-    # Summary
     if prices:
-        pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0
         color = "green" if total_pnl >= 0 else "red"
         sign = "+" if total_pnl >= 0 else ""
 
         console.print(f"\n[bold]Summary:[/bold]")
-        console.print(f"  Cash:        Rp {portfolio.cash:,.0f}")
         console.print(f"  Total Cost:  Rp {total_cost:,.0f}")
         console.print(f"  Total Value: Rp {total_value:,.0f}")
         console.print(f"  Total P&L:   [{color}]{sign}Rp {total_pnl:,.0f} ({sign}{pnl_pct:.1f}%)[/{color}]")
-        console.print(f"  Portfolio:   Rp {portfolio_value:,.0f}")
 
 
 @portfolio_app.command("add")
@@ -2156,6 +2190,101 @@ def portfolio_pnl(
                 worst = position_pnl[-1]
                 console.print(f"\n[green]Best:[/green] {best['symbol']} ({'+' if best['pnl_pct'] >= 0 else ''}{best['pnl_pct']:.1f}%)")
                 console.print(f"[red]Worst:[/red] {worst['symbol']} ({'+' if worst['pnl_pct'] >= 0 else ''}{worst['pnl_pct']:.1f}%)")
+
+
+@portfolio_app.command("summary")
+def portfolio_summary() -> None:
+    """Show a consolidated portfolio P&L summary.
+
+    Displays holdings count, total cost, market value, unrealized P&L,
+    best/worst performers, and cash balance in a single view.
+
+    Examples:
+        stockai portfolio summary
+    """
+    from stockai.autopilot.executor import PaperExecutor
+    from stockai.data.sources.yahoo import YahooFinanceSource
+
+    executor = PaperExecutor()
+    executor.load_portfolio()
+
+    if not executor.portfolio or not executor.portfolio.positions:
+        console.print("[dim]No positions in portfolio.[/dim]")
+        return
+
+    source = YahooFinanceSource()
+    symbols = list(executor.portfolio.positions.keys())
+    price_map = {}
+    prices_data = source.get_multiple_prices(symbols)
+    for sym, data in prices_data.items():
+        price = data.get("price")
+        if price:
+            price_map[sym] = price
+    executor.update_prices(price_map)
+
+    portfolio = executor.portfolio
+    positions = portfolio.positions
+
+    total_cost = 0.0
+    total_value = 0.0
+    position_rows = []
+
+    for sym, pos in positions.items():
+        cost = pos.shares * pos.avg_price
+        value = pos.shares * pos.current_price
+        pnl = value - cost
+        pnl_pct = (pnl / cost * 100) if cost > 0 else 0.0
+        total_cost += cost
+        total_value += value
+        position_rows.append({"symbol": sym, "cost": cost, "value": value, "pnl": pnl, "pnl_pct": pnl_pct})
+
+    total_pnl = total_value - total_cost
+    total_pnl_pct = (total_pnl / total_cost * 100) if total_cost > 0 else 0.0
+    pnl_color = "green" if total_pnl >= 0 else "red"
+    sign = "+" if total_pnl >= 0 else ""
+
+    position_rows.sort(key=lambda x: x["pnl_pct"], reverse=True)
+    best = position_rows[0] if position_rows else None
+    worst = position_rows[-1] if len(position_rows) > 1 else None
+
+    cash = float(getattr(portfolio, "cash", 0) or 0)
+
+    summary_lines = [
+        f"[bold]Holdings:[/bold] {len(positions)} stocks",
+        f"[bold]Cost Basis:[/bold] Rp {total_cost:,.0f}",
+        f"[bold]Market Value:[/bold] Rp {total_value:,.0f}",
+        f"[bold {pnl_color}]Unrealized P&L:[/bold {pnl_color}] [{pnl_color}]{sign}Rp {total_pnl:,.0f} ({sign}{total_pnl_pct:.1f}%)[/{pnl_color}]",
+    ]
+    if cash:
+        summary_lines.append(f"[bold]Cash:[/bold] Rp {cash:,.0f}")
+    if best:
+        b_sign = "+" if best["pnl_pct"] >= 0 else ""
+        summary_lines.append(f"[bold green]Best:[/bold green] {best['symbol']} ({b_sign}{best['pnl_pct']:.1f}%)")
+    if worst:
+        w_sign = "+" if worst["pnl_pct"] >= 0 else ""
+        summary_lines.append(f"[bold red]Worst:[/bold red] {worst['symbol']} ({w_sign}{worst['pnl_pct']:.1f}%)")
+
+    console.print(Panel("\n".join(summary_lines), title="📊 Portfolio Summary", border_style=pnl_color))
+
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Symbol", style="cyan")
+    table.add_column("Cost Basis", justify="right")
+    table.add_column("Market Value", justify="right")
+    table.add_column("P&L", justify="right")
+    table.add_column("P&L %", justify="right")
+
+    for row in position_rows:
+        color = "green" if row["pnl"] >= 0 else "red"
+        s = "+" if row["pnl"] >= 0 else ""
+        table.add_row(
+            row["symbol"],
+            f"Rp {row['cost']:,.0f}",
+            f"Rp {row['value']:,.0f}",
+            f"[{color}]{s}Rp {row['pnl']:,.0f}[/{color}]",
+            f"[{color}]{s}{row['pnl_pct']:.1f}%[/{color}]",
+        )
+
+    console.print(table)
 
 
 @portfolio_app.command("transactions")

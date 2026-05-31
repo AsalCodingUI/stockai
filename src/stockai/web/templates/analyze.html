@@ -2,54 +2,59 @@
 
 {% block title %}Analyze {{ symbol }} - StockAI{% endblock %}
 
+{% block extra_head %}
+<!-- Plotly CDN for chart rendering -->
+<script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-6xl mx-auto">
+<div class="max-w-5xl mx-auto">
     <!-- Header -->
     <div class="flex justify-between items-center mb-6">
         <div>
-            <h1 class="text-3xl font-bold">{{ symbol }}</h1>
-            <p class="text-gray-600">{{ stock_info.name | default('Indonesian Stock') }}</p>
+            <h1 style="font-size:24px;font-weight:500;color:var(--color-ink);letter-spacing:-0.5px;font-family:var(--font-family-heading)">{{ symbol }}</h1>
+            <p style="color:var(--color-steel);font-size:13px;margin-top:4px">{{ stock_info.name | default('Indonesian Stock') }}</p>
         </div>
-        <div class="flex space-x-2">
-            <a href="/stocks" class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition">
-                Back to List
+        <div class="flex gap-2">
+            <a href="/stocks" class="btn-secondary" style="font-size:13px;padding:8px 18px">
+                ← Back
             </a>
-            <button id="btn-export" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
-                Export PDF
+            <button id="btn-export" class="btn-primary" style="font-size:13px;padding:8px 18px">
+                Export Report
             </button>
         </div>
     </div>
 
-    <!-- Price Card -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <!-- Price Card — stat row -->
+    <div class="card mb-5" style="border-radius:var(--rounded-xl);padding:var(--spacing-xl)">
         <div class="grid md:grid-cols-4 gap-4">
             <div>
-                <div class="text-sm text-gray-500">Current Price</div>
-                <div class="text-2xl font-bold" id="current-price">
+                <div class="stat-label">Current Price</div>
+                <div class="stat-value" id="current-price">
                     {{ "Rp {:,.0f}".format(stock_info.price) if stock_info.price else 'Loading...' }}
                 </div>
             </div>
             <div>
-                <div class="text-sm text-gray-500">Change</div>
-                <div class="text-xl font-semibold" id="price-change">
+                <div class="stat-label">Change</div>
+                <div class="stat-value" id="price-change" style="font-size:20px">
                     {% if stock_info.change_pct is defined %}
-                        <span class="{{ 'positive' if stock_info.change_pct >= 0 else 'negative' }}">
+                        <span style="{{ 'color:var(--miro-success)' if stock_info.change_pct >= 0 else 'color:#EF4444' }}">
                             {{ "{:+.2f}%".format(stock_info.change_pct) }}
                         </span>
                     {% else %}
-                        -
+                        <span style="color:var(--color-steel)">-</span>
                     {% endif %}
                 </div>
             </div>
             <div>
-                <div class="text-sm text-gray-500">Volume</div>
-                <div class="text-xl" id="volume">
+                <div class="stat-label">Volume</div>
+                <div class="stat-value" id="volume" style="font-size:20px;font-weight:500">
                     {{ "{:,.0f}".format(stock_info.volume) if stock_info.volume else '-' }}
                 </div>
             </div>
             <div>
-                <div class="text-sm text-gray-500">Market Cap</div>
-                <div class="text-xl" id="market-cap">
+                <div class="stat-label">Market Cap</div>
+                <div class="stat-value" id="market-cap" style="font-size:20px;font-weight:500">
                     {{ stock_info.market_cap | default('-') }}
                 </div>
             </div>
@@ -57,63 +62,72 @@
     </div>
 
     <!-- Chart Section -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div class="card mb-5">
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold">Price Chart</h2>
-            <div class="flex space-x-2">
-                <button class="period-btn px-3 py-1 text-sm rounded bg-gray-200 hover:bg-gray-300" data-period="1mo">1M</button>
-                <button class="period-btn px-3 py-1 text-sm rounded bg-blue-600 text-white" data-period="3mo">3M</button>
-                <button class="period-btn px-3 py-1 text-sm rounded bg-gray-200 hover:bg-gray-300" data-period="6mo">6M</button>
-                <button class="period-btn px-3 py-1 text-sm rounded bg-gray-200 hover:bg-gray-300" data-period="1y">1Y</button>
+            <div class="section-title" style="margin-bottom:0">
+                <i class="ph ph-chart-candlestick mr-1.5 align-middle"></i> Price Chart
+            </div>
+            <!-- Period pill tabs -->
+            <div class="flex gap-2">
+                <button class="pill-tab period-btn" data-period="1mo">1M</button>
+                <button class="pill-tab active period-btn" data-period="3mo">3M</button>
+                <button class="pill-tab period-btn" data-period="6mo">6M</button>
+                <button class="pill-tab period-btn" data-period="1y">1Y</button>
             </div>
         </div>
-        <div id="price-chart" style="height: 400px;">
+        <div id="price-chart" style="height:400px">
             <div class="flex items-center justify-center h-full">
                 <div class="loader"></div>
             </div>
         </div>
     </div>
 
-    <!-- Analysis Grid -->
-    <div class="grid md:grid-cols-2 gap-6 mb-6">
-        <!-- Sentiment Analysis -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-bold mb-4">Sentiment Analysis</h2>
+    <!-- Analysis Grid — pastel feature cards for differentiation -->
+    <div class="grid md:grid-cols-2 gap-5 mb-5">
+        <!-- Sentiment — coral tint -->
+        <div class="card-feature-coral card-feature">
+            <div class="section-title mb-4" style="color:var(--miro-coral)">
+                <i class="ph ph-newspaper mr-1.5 align-middle"></i> Sentiment Analysis
+            </div>
             <div id="sentiment-content">
-                <div class="text-center py-4">
+                <div class="text-center py-8">
                     <div class="loader mx-auto"></div>
-                    <p class="mt-2 text-gray-500">Analyzing news sentiment...</p>
+                    <p style="margin-top:8px;color:var(--color-steel);font-size:12px;font-family:var(--font-family-mono)">Analyzing news sentiment...</p>
                 </div>
             </div>
         </div>
 
-        <!-- AI Prediction -->
-        <div class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-xl font-bold mb-4">AI Prediction</h2>
+        <!-- AI Prediction — teal tint -->
+        <div class="card-feature-teal card-feature">
+            <div class="section-title mb-4" style="color:var(--miro-teal)">
+                <i class="ph ph-robot mr-1.5 align-middle"></i> AI Prediction
+            </div>
             <div id="prediction-content">
-                <div class="text-center py-4">
+                <div class="text-center py-8">
                     <div class="loader mx-auto"></div>
-                    <p class="mt-2 text-gray-500">Generating prediction...</p>
+                    <p style="margin-top:8px;color:var(--color-steel);font-size:12px;font-family:var(--font-family-mono)">Generating prediction...</p>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Technical Indicators -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-xl font-bold mb-4">Technical Indicators</h2>
+    <div class="card">
+        <div class="section-title mb-4">
+            <i class="ph ph-gauge mr-1.5 align-middle"></i> Technical Indicators
+        </div>
         <div id="technicals-content" class="grid md:grid-cols-3 gap-4">
-            <div class="p-4 bg-gray-50 rounded">
-                <div class="text-sm text-gray-500">RSI (14)</div>
-                <div class="text-xl font-semibold" id="rsi-value">-</div>
+            <div style="background:var(--color-surface-soft);border:1px solid var(--color-hairline);border-radius:var(--rounded-lg);padding:14px">
+                <div class="stat-label">RSI (14)</div>
+                <div class="stat-value" id="rsi-value" style="font-size:20px">-</div>
             </div>
-            <div class="p-4 bg-gray-50 rounded">
-                <div class="text-sm text-gray-500">MACD Signal</div>
-                <div class="text-xl font-semibold" id="macd-value">-</div>
+            <div style="background:var(--color-surface-soft);border:1px solid var(--color-hairline);border-radius:var(--rounded-lg);padding:14px">
+                <div class="stat-label">MACD Signal</div>
+                <div class="stat-value" id="macd-value" style="font-size:20px">-</div>
             </div>
-            <div class="p-4 bg-gray-50 rounded">
-                <div class="text-sm text-gray-500">SMA 20</div>
-                <div class="text-xl font-semibold" id="sma20-value">-</div>
+            <div style="background:var(--color-surface-soft);border:1px solid var(--color-hairline);border-radius:var(--rounded-lg);padding:14px">
+                <div class="stat-label">SMA 20</div>
+                <div class="stat-value" id="sma20-value" style="font-size:20px">-</div>
             </div>
         </div>
     </div>
@@ -127,12 +141,9 @@ let currentPeriod = '3mo';
 async function loadChart(period) {
     currentPeriod = period;
 
-    // Update button states
+    // Update pill-tab active states
     document.querySelectorAll('.period-btn').forEach(btn => {
-        const isActive = btn.dataset.period === period;
-        btn.classList.toggle('bg-blue-600', isActive);
-        btn.classList.toggle('text-white', isActive);
-        btn.classList.toggle('bg-gray-200', !isActive);
+        btn.className = btn.dataset.period === period ? 'pill-tab active period-btn' : 'pill-tab period-btn';
     });
 
     try {
@@ -146,27 +157,34 @@ async function loadChart(period) {
             low: data.low,
             close: data.close,
             type: 'candlestick',
-            increasing: {line: {color: '#10b981'}},
-            decreasing: {line: {color: '#ef4444'}}
+            increasing: {line: {color: '#27A644'}, fillcolor: 'rgba(39,166,68,0.7)'},
+            decreasing: {line: {color: '#EF4444'}, fillcolor: 'rgba(239,68,68,0.7)'}
         };
 
         const layout = {
-            title: '',
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor:  'rgba(0,0,0,0)',
+            font: { family: 'Inter, sans-serif', color: '#8A8F98', size: 11 },
             xaxis: {
+                gridcolor: '#1C1D21',
+                linecolor: '#23252A',
                 rangeslider: {visible: false},
                 type: 'date'
             },
             yaxis: {
+                gridcolor: '#1C1D21',
+                linecolor: '#23252A',
                 title: 'Price (Rp)',
                 autorange: true
             },
             margin: {t: 20, b: 40, l: 60, r: 20}
         };
 
-        Plotly.newPlot('price-chart', [trace], layout, {responsive: true});
+        Plotly.newPlot('price-chart', [trace], layout, {responsive: true, displayModeBar: false});
     } catch (e) {
-        const chartEl = document.getElementById('price-chart');
-        chartEl.textContent = 'Error loading chart';
+        const el = document.getElementById('price-chart');
+        el.style.cssText = 'display:flex;align-items:center;justify-content:center;color:#EF4444;font-size:12px;font-family:var(--font-family-mono)';
+        el.textContent = 'Error loading chart';
         console.error('Chart error:', e);
     }
 }
@@ -178,73 +196,54 @@ async function loadSentiment() {
         const res = await fetch('/api/sentiment/' + encodeURIComponent(symbol));
         const data = await res.json();
 
-        // Clear container
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
+        while (container.firstChild) container.removeChild(container.firstChild);
 
         if (!data.sentiment || data.article_count === 0) {
             const p = document.createElement('p');
-            p.className = 'text-gray-500';
+            p.style.cssText = 'color:var(--color-steel);font-size:12px;font-family:var(--font-family-mono)';
             p.textContent = 'No recent news found for sentiment analysis.';
             container.appendChild(p);
             return;
         }
 
-        // Sentiment score display
         const scoreDiv = document.createElement('div');
-        scoreDiv.className = 'text-center mb-4';
+        scoreDiv.style.cssText = 'text-align:center;margin-bottom:16px';
 
         const scoreText = document.createElement('div');
-        scoreText.className = 'text-4xl font-bold ' + (data.avg_sentiment_score >= 0 ? 'positive' : 'negative');
+        scoreText.style.cssText = 'font-size:36px;font-weight:500;font-family:var(--font-family-mono);letter-spacing:-1px;color:' +
+            (data.avg_sentiment_score >= 0 ? 'var(--miro-success)' : '#EF4444');
         scoreText.textContent = (data.avg_sentiment_score >= 0 ? '+' : '') + data.avg_sentiment_score.toFixed(2);
         scoreDiv.appendChild(scoreText);
 
         const labelText = document.createElement('div');
-        labelText.className = 'text-lg ' + (data.overall_sentiment === 'BULLISH' ? 'text-green-600' : data.overall_sentiment === 'BEARISH' ? 'text-red-600' : 'text-gray-600');
+        labelText.style.cssText = 'font-size:12px;font-weight:600;margin-top:4px;color:' +
+            (data.overall_sentiment === 'BULLISH' ? 'var(--miro-success)' :
+             data.overall_sentiment === 'BEARISH' ? '#EF4444' : 'var(--color-steel)');
         labelText.textContent = data.overall_sentiment;
         scoreDiv.appendChild(labelText);
-
         container.appendChild(scoreDiv);
 
-        // Stats
         const statsDiv = document.createElement('div');
-        statsDiv.className = 'grid grid-cols-2 gap-4 text-sm';
+        statsDiv.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px';
 
-        const articlesDiv = document.createElement('div');
-        articlesDiv.className = 'text-center p-2 bg-gray-50 rounded';
-        const articlesLabel = document.createElement('div');
-        articlesLabel.className = 'text-gray-500';
-        articlesLabel.textContent = 'Articles';
-        const articlesValue = document.createElement('div');
-        articlesValue.className = 'font-semibold';
-        articlesValue.textContent = data.article_count;
-        articlesDiv.appendChild(articlesLabel);
-        articlesDiv.appendChild(articlesValue);
-
-        const confidenceDiv = document.createElement('div');
-        confidenceDiv.className = 'text-center p-2 bg-gray-50 rounded';
-        const confidenceLabel = document.createElement('div');
-        confidenceLabel.className = 'text-gray-500';
-        confidenceLabel.textContent = 'Confidence';
-        const confidenceValue = document.createElement('div');
-        confidenceValue.className = 'font-semibold';
-        confidenceValue.textContent = (data.confidence * 100).toFixed(0) + '%';
-        confidenceDiv.appendChild(confidenceLabel);
-        confidenceDiv.appendChild(confidenceValue);
-
-        statsDiv.appendChild(articlesDiv);
-        statsDiv.appendChild(confidenceDiv);
+        [
+            { label: 'Articles', value: data.article_count },
+            { label: 'Confidence', value: (data.confidence * 100).toFixed(0) + '%' }
+        ].forEach(({ label, value }) => {
+            const d = document.createElement('div');
+            d.style.cssText = 'text-align:center;padding:10px;background:var(--color-canvas);border:1px solid var(--color-hairline);border-radius:var(--rounded-lg)';
+            d.innerHTML = `<div style="color:var(--color-steel);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px">${label}</div>
+                           <div style="font-weight:500;margin-top:2px;font-family:var(--font-family-mono)">${value}</div>`;
+            statsDiv.appendChild(d);
+        });
         container.appendChild(statsDiv);
 
     } catch (e) {
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
-        const errorP = document.createElement('p');
-        errorP.className = 'text-red-500';
-        errorP.textContent = 'Error loading sentiment analysis';
-        container.appendChild(errorP);
+        while (container.firstChild) container.removeChild(container.firstChild);
+        const p = document.createElement('p');
+        p.style.cssText = 'color:#EF4444;font-size:12px;font-family:var(--font-family-mono)';
+        p.textContent = 'Error loading sentiment analysis';
+        container.appendChild(p);
         console.error('Sentiment error:', e);
     }
 }
@@ -256,14 +255,11 @@ async function loadPrediction() {
         const res = await fetch('/api/predict/' + encodeURIComponent(symbol));
         const data = await res.json();
 
-        // Clear container
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
+        while (container.firstChild) container.removeChild(container.firstChild);
 
         if (!data.prediction) {
             const p = document.createElement('p');
-            p.className = 'text-gray-500';
+            p.style.cssText = 'color:var(--color-steel);font-size:12px;font-family:var(--font-family-mono)';
             p.textContent = data.message || 'Prediction unavailable';
             container.appendChild(p);
             return;
@@ -271,38 +267,34 @@ async function loadPrediction() {
 
         const pred = data.prediction;
 
-        // Direction display
         const dirDiv = document.createElement('div');
-        dirDiv.className = 'text-center mb-4';
+        dirDiv.style.cssText = 'text-align:center;margin-bottom:16px';
 
         const dirText = document.createElement('div');
-        dirText.className = 'text-3xl font-bold ' + (pred.direction === 'UP' ? 'positive' : 'negative');
+        dirText.style.cssText = 'font-size:28px;font-weight:500;font-family:var(--font-family-mono);color:' +
+            (pred.direction === 'UP' ? 'var(--miro-success)' : '#EF4444');
         dirText.textContent = pred.direction === 'UP' ? '↑ BULLISH' : '↓ BEARISH';
         dirDiv.appendChild(dirText);
 
         const confText = document.createElement('div');
-        confText.className = 'text-sm text-gray-500';
+        confText.style.cssText = 'font-size:12px;color:var(--color-steel);margin-top:6px';
         confText.textContent = 'Confidence: ' + (pred.confidence * 100).toFixed(0) + '%';
         dirDiv.appendChild(confText);
-
         container.appendChild(dirDiv);
 
-        // Model weights
         if (pred.model_weights) {
             const weightsDiv = document.createElement('div');
-            weightsDiv.className = 'text-xs text-gray-400 text-center';
-            weightsDiv.textContent = 'XGBoost: ' + (pred.model_weights.xgboost * 100) + '% | LSTM: ' + (pred.model_weights.lstm * 100) + '% | Sentiment: ' + (pred.model_weights.sentiment * 100) + '%';
+            weightsDiv.style.cssText = 'font-size:10px;color:var(--color-muted);text-align:center;font-family:var(--font-family-mono);margin-top:12px;padding-top:12px;border-top:1px solid var(--color-hairline-soft)';
+            weightsDiv.textContent = 'XGB: ' + (pred.model_weights.xgboost * 100) + '% | LSTM: ' + (pred.model_weights.lstm * 100) + '% | Sent: ' + (pred.model_weights.sentiment * 100) + '%';
             container.appendChild(weightsDiv);
         }
 
     } catch (e) {
-        while (container.firstChild) {
-            container.removeChild(container.firstChild);
-        }
-        const errorP = document.createElement('p');
-        errorP.className = 'text-gray-500';
-        errorP.textContent = 'Prediction models not available';
-        container.appendChild(errorP);
+        while (container.firstChild) container.removeChild(container.firstChild);
+        const p = document.createElement('p');
+        p.style.cssText = 'color:var(--color-steel);font-size:12px;font-family:var(--font-family-mono)';
+        p.textContent = 'Prediction models not available';
+        container.appendChild(p);
         console.error('Prediction error:', e);
     }
 }
@@ -312,27 +304,20 @@ document.querySelectorAll('.period-btn').forEach(btn => {
     btn.addEventListener('click', () => loadChart(btn.dataset.period));
 });
 
-// Export PDF handler - generates JSON report for download
+// Export handler
 document.getElementById('btn-export').addEventListener('click', async () => {
     try {
-        // Fetch report data
         const res = await fetch('/api/export/' + encodeURIComponent(symbol));
         const data = await res.json();
-
-        // Create and download JSON report
-        const reportContent = JSON.stringify(data, null, 2);
-        const blob = new Blob([reportContent], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-
-        const a = document.createElement('a');
-        a.href = url;
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
         a.download = symbol + '_analysis_report.json';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
-        // Also show print dialog for PDF
         if (confirm('Report downloaded as JSON. Would you like to print the current page as PDF?')) {
             window.print();
         }

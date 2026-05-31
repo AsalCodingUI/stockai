@@ -46,9 +46,24 @@ def create_app() -> FastAPI:
     app.state.templates = templates
 
     # Include routers
-    from stockai.web.routes import api_router, pages_router
+    from stockai.web.routers.system import router as system_router
+    from stockai.web.routers.scan import router as scan_router
+    from stockai.web.routers.backtest import router as backtest_router
+    from stockai.web.routers.coach import router as coach_router
+    from stockai.web.routers.stocks import router as stocks_router
+    from stockai.web.routers.portfolio import router as portfolio_router
+    from stockai.web.routers.watchlist import router as watchlist_router
+    from stockai.web.routers.journal import router as journal_router
+    from stockai.web.routers.pages import router as pages_router
 
-    app.include_router(api_router, prefix="/api")
+    app.include_router(system_router, prefix="/api")
+    app.include_router(scan_router, prefix="/api")
+    app.include_router(backtest_router, prefix="/api")
+    app.include_router(coach_router, prefix="/api")
+    app.include_router(stocks_router, prefix="/api")
+    app.include_router(portfolio_router, prefix="/api")
+    app.include_router(watchlist_router, prefix="/api")
+    app.include_router(journal_router, prefix="/api/journal")
     app.include_router(pages_router)
 
     @app.on_event("startup")

@@ -1,25 +1,65 @@
+/**
+ * StockAI App Styles — Miro DNA × Dark Mode
+ *
+ * Component-level styles following design.md tokens.
+ * All buttons are pill-shaped (border-radius: var(--rounded-full)).
+ * Brand yellow is ONLY used for wordmark/logo — never CTA backgrounds.
+ */
+
+/* ── Legacy root aliases (keep existing inline code working) ── */
 :root {
-    --bg-primary: #0a0a0f;
-    --bg-card: #111118;
-    --bg-card-hover: #16161f;
-    --border: #1e1e2e;
-    --border-bright: #2a2a3e;
-    --green: #00ff88;
-    --cyan: #00d4ff;
-    --orange: #ff9500;
-    --red: #ff3b5c;
-    --text: #e2e8f0;
-    --text-muted: #64748b;
-    --text-dim: #94a3b8;
+    --bg-primary:    var(--color-canvas);
+    --bg-card:       var(--color-surface);
+    --bg-card-hover: var(--color-surface-soft);
+    --border:        var(--color-hairline);
+    --border-bright: var(--color-hairline-strong);
+    --green:         var(--miro-success);
+    --cyan:          var(--miro-blue);
+    --orange:        #F59E0B;
+    --red:           #EF4444;
+    --text:          var(--color-ink);
+    --text-muted:    var(--color-steel);
+    --text-dim:      var(--color-charcoal);
+    --text-success:  var(--miro-success);
+    --text-warning:  #F59E0B;
+    --text-error:    #EF4444;
 }
 
+/* ── Base reset ── */
 * {
-    font-family: "JetBrains Mono", "Fira Code", monospace;
+    font-family: var(--font-family-base);
 }
 
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+    border-radius: var(--rounded-md);
+}
+
+/* Monospace data elements */
+code, pre,
+.mono, .font-mono,
+#global-search,
+.search-kbd,
+.topbar-status,
+.gate-badge,
+.badge,
+.stat-value,
+.table-numeric,
+td.numeric,
+th.numeric,
+.stock-code,
+.stock-symbol {
+    font-family: var(--font-family-mono) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * LAYOUT
+ * ═══════════════════════════════════════════════════════════════════════ */
 body.app-body {
-    background: radial-gradient(circle at 20% 0%, #141422, var(--bg-primary) 45%);
-    color: var(--text);
+    background: var(--color-canvas);
+    color: var(--color-ink);
     min-height: 100vh;
 }
 
@@ -29,110 +69,557 @@ body.app-body {
     min-height: 100vh;
 }
 
+/* ─── Sidebar ─────────────────────────────────────────────────────────── */
 .sidebar {
-    border-right: 1px solid var(--border);
-    padding: 20px 16px;
-    background: #0c0c14;
+    border-right: 1px solid var(--color-hairline);
+    padding: 24px 16px;
+    background: var(--color-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
+/* Brand / Wordmark — canary yellow, brand signature */
 .brand {
-    display: block;
-    font-weight: 700;
-    font-size: 20px;
-    color: var(--cyan);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 15px;
+    font-family: var(--font-family-heading);
+    color: var(--miro-yellow);         /* yellow ONLY for wordmark */
     text-decoration: none;
-    margin-bottom: 20px;
+    margin-bottom: 32px;
+    letter-spacing: -0.3px;
+    transition: color var(--duration-fast) var(--ease-out);
 }
 
+.brand:hover {
+    color: var(--miro-yellow-deep);
+}
+
+/* Side nav — pill-style active */
 .side-nav {
     display: grid;
-    gap: 8px;
+    gap: 2px;
 }
 
 .side-link {
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--rounded-full);   /* pill nav links */
     text-decoration: none;
-    color: var(--text-dim);
+    color: var(--color-steel);
+    font-size: var(--type-body-sm);
+    font-weight: 500;
+    transition: var(--transition-colors), border-color var(--duration-fast) var(--ease-out);
 }
 
 .side-link:hover {
-    border-color: var(--cyan);
-    color: var(--text);
+    background: var(--color-surface-soft);
+    color: var(--color-ink);
+    border-color: var(--color-hairline);
 }
 
+.side-link.active {
+    background: var(--color-surface-soft);
+    color: var(--color-ink);
+    border-color: var(--color-hairline-strong);
+}
+
+/* ─── Main Panel ──────────────────────────────────────────────────────── */
 .main-panel {
-    padding: 18px;
+    padding: 24px 32px;
+    overflow-x: hidden;
 }
 
+/* ─── Topbar ──────────────────────────────────────────────────────────── */
 .topbar {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--color-hairline);
 }
 
 .topbar-title {
-    font-size: 18px;
-    font-weight: 600;
+    font-size: var(--type-h5);
+    font-weight: 500;
+    color: var(--color-ink);
+    letter-spacing: -0.2px;
 }
 
 .topbar-status {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--text-muted);
+    color: var(--color-steel);
+    font-size: var(--type-micro);
 }
 
 .content-shell {
     display: block;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * CARDS — design.md §Cards & Containers
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* card-base: standard dark surface card */
 .card, .stat-card {
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-hairline-soft);
+    border-radius: var(--rounded-xl);    /* 16px */
+    padding: var(--spacing-xl);          /* 24px */
     overflow: hidden;
+    transition: border-color var(--duration-fast) var(--ease-out),
+                box-shadow var(--duration-fast) var(--ease-out);
 }
 
-.card:hover, .stat-card:hover {
-    border-color: var(--border-bright);
-    background: var(--bg-card-hover);
+.card:hover {
+    border-color: var(--color-hairline);
+    box-shadow: var(--shadow-sm);
 }
 
+/* Pastel feature cards — dark-adapted (translucent tinted bg) */
+.card-feature {
+    background: var(--color-surface);
+    border: 1px solid var(--color-hairline-soft);
+    border-radius: var(--rounded-xxxl);  /* 28px */
+    padding: var(--spacing-xxl);         /* 32px */
+}
+
+.card-feature-yellow {
+    background: var(--miro-yellow-light);
+    border: 1px solid rgba(255, 208, 47, 0.20);
+    border-radius: var(--rounded-xxxl);
+    padding: var(--spacing-xxl);
+}
+
+.card-feature-coral {
+    background: var(--miro-coral-bg);
+    border: 1px solid rgba(232, 115, 90, 0.20);
+    border-radius: var(--rounded-xxxl);
+    padding: var(--spacing-xxl);
+}
+
+.card-feature-teal {
+    background: var(--miro-teal-bg);
+    border: 1px solid rgba(44, 181, 160, 0.20);
+    border-radius: var(--rounded-xxxl);
+    padding: var(--spacing-xxl);
+}
+
+.card-feature-rose {
+    background: var(--miro-rose-bg);
+    border: 1px solid rgba(212, 100, 138, 0.20);
+    border-radius: var(--rounded-xxxl);
+    padding: var(--spacing-xxl);
+}
+
+/* ─── Typography within cards ─────────────────────────────────────────── */
 .stat-label {
-    color: var(--text-muted);
-    font-size: 12px;
+    color: var(--color-steel);
+    font-size: var(--type-micro-upper);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--ls-micro-upper);
 }
 
 .stat-value {
-    color: var(--text);
-    font-size: 28px;
-    font-weight: 700;
+    color: var(--color-ink);
+    font-size: 24px;
+    font-weight: 500;
+    margin-top: 4px;
+    font-family: var(--font-family-mono);
 }
 
 .section-title {
-    font-size: 14px;
-    letter-spacing: 0.03em;
-    color: var(--cyan);
+    font-size: var(--type-micro-upper);
+    font-weight: 600;
+    color: var(--color-steel);
     text-transform: uppercase;
+    letter-spacing: var(--ls-micro-upper);
+    margin-bottom: 12px;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * BUTTONS — design.md §Buttons
+ * RULE: ALL buttons use border-radius: var(--rounded-full) (9999px)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+/* button-primary: white pill (dark mode equivalent of black pill) */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    border: 1px solid var(--color-primary);
+    padding: 10px 20px;
+    border-radius: var(--rounded-full);  /* pill — brand signature */
+    font-size: var(--type-button);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-colors);
+    min-height: var(--touch-target-min);
+    white-space: nowrap;
+}
+
+.btn-primary:hover {
+    background: var(--color-primary-pressed);
+    border-color: var(--color-primary-pressed);
+}
+
+/* button-secondary: outlined pill */
+.btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--color-ink);
+    border: 1px solid var(--color-hairline-strong);
+    padding: 10px 20px;
+    border-radius: var(--rounded-full);
+    font-size: var(--type-button);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-colors);
+    min-height: var(--touch-target-min);
+    white-space: nowrap;
+}
+
+.btn-secondary:hover {
+    background: var(--color-surface-soft);
+    border-color: var(--color-ink);
+    color: var(--color-ink);
+}
+
+/* button-blue: brand blue pill for inline callouts */
+.btn-blue {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--miro-blue);
+    color: #fff;
+    border: 1px solid var(--miro-blue);
+    padding: 10px 20px;
+    border-radius: var(--rounded-full);
+    font-size: var(--type-button);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-colors);
+    min-height: var(--touch-target-min);
+}
+
+.btn-blue:hover {
+    background: var(--miro-blue-pressed);
+    border-color: var(--miro-blue-pressed);
+}
+
+/* button-ghost: quiet rect ghost */
+.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    color: var(--color-ink);
+    border: 1px solid transparent;
+    padding: 6px 10px;
+    border-radius: var(--rounded-md);
+    font-size: var(--type-button);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-colors);
+}
+
+.btn-ghost:hover {
+    background: var(--color-surface-soft);
+}
+
+/* button-filter (pill variant of filter) */
+.btn-filter {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid var(--color-hairline-strong);
+    color: var(--color-charcoal);
+    background: transparent;
+    padding: 6px 14px;
+    border-radius: var(--rounded-full);   /* pill */
+    font-size: var(--type-body-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-colors);
+    min-height: 36px;
+}
+
+.btn-filter.active,
+.btn-filter:hover {
+    border-color: var(--color-ink);
+    color: var(--color-ink);
+    background: var(--color-surface-soft);
+}
+
+/* button-link: inline text link */
+.btn-link, .text-link {
+    background: transparent;
+    border: none;
+    color: var(--miro-blue);
+    font-size: var(--type-body-sm);
+    font-weight: 500;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-out);
+}
+
+.btn-link:hover, .text-link:hover {
+    color: var(--miro-blue-pressed);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * BADGES & STATUS PILLS — design.md §Badges & Status
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: var(--rounded-full);   /* pill badge — always */
+    font-size: var(--type-caption);
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+/* badge-tag-yellow */
+.badge-yellow, .badge-promo {
+    background: var(--color-surface-yellow);
+    color: var(--miro-yellow);
+    border-color: rgba(255, 208, 47, 0.20);
+}
+
+/* badge-tag-purple (AI / featured) */
+.badge-purple {
+    background: var(--color-surface-featured);
+    color: var(--miro-blue);
+    border-color: rgba(94, 106, 210, 0.20);
+}
+
+/* badge-tag-coral */
+.badge-coral, .badge-watch {
+    background: var(--miro-coral-bg);
+    color: var(--miro-coral);
+    border-color: rgba(232, 115, 90, 0.20);
+}
+
+/* badge-success / ready */
+.badge-ready, .badge-success {
+    background: var(--miro-success-bg);
+    color: var(--miro-success);
+    border-color: rgba(39, 166, 68, 0.20);
+}
+
+/* badge-rejected / error */
+.badge-rejected {
+    background: rgba(239, 68, 68, 0.10);
+    color: #EF4444;
+    border-color: rgba(239, 68, 68, 0.20);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * PILL TABS — design.md §Tabs
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.pill-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-full);
+    background: transparent;
+    color: var(--color-steel);
+    font-size: var(--type-body-sm);
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition-colors);
+    text-decoration: none;
+}
+
+.pill-tab:hover {
+    color: var(--color-ink);
+    border-color: var(--color-hairline-strong);
+    background: var(--color-surface-soft);
+}
+
+.pill-tab.active {
+    background: var(--color-primary);
+    color: var(--color-on-primary);
+    border-color: var(--color-primary);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * INPUTS — design.md §Inputs & Forms
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.input-base,
+input[type="text"].input-miro,
+input[type="number"].input-miro,
+select.input-miro {
+    background: var(--color-surface);
+    color: var(--color-ink);
+    border: 1px solid var(--color-hairline-strong);
+    border-radius: var(--rounded-md);
+    padding: 10px 14px;
+    font-size: var(--type-body-sm);
+    height: 44px;
+    width: 100%;
+    transition: border-color var(--duration-fast) var(--ease-out);
+    outline: none;
+}
+
+.input-base:focus,
+input[type="text"].input-miro:focus {
+    border: 2px solid var(--miro-blue);
+}
+
+/* search pill */
+.search-pill-input {
+    background: var(--color-surface);
+    color: var(--color-steel);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-md);
+    height: 40px;
+    font-size: var(--type-body-sm);
+    transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.search-pill-input:focus {
+    border-color: var(--color-hairline-strong);
+    color: var(--color-ink);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * GATE BADGES (existing pattern, pill-ified)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.gate-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    border-radius: var(--rounded-full);  /* pill */
+    padding: 6px 14px;
+    font-size: var(--type-micro);
+    font-weight: 600;
+    margin-bottom: 10px;
+    border: 1px solid transparent;
+}
+
+.gate-badge-pass {
+    color: var(--miro-success);
+    background: var(--miro-success-bg);
+    border-color: rgba(39, 166, 68, 0.20);
+}
+
+.gate-badge-watch {
+    color: #F59E0B;
+    background: rgba(245, 158, 11, 0.10);
+    border-color: rgba(245, 158, 11, 0.20);
+}
+
+.gate-badge-reject {
+    color: #EF4444;
+    background: rgba(239, 68, 68, 0.10);
+    border-color: rgba(239, 68, 68, 0.20);
+}
+
+.gate-summary-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: var(--type-micro);
+    color: var(--color-charcoal);
+    padding: 4px 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * SIGNAL CARDS — pastel accents on dark
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.signal-card {
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-xl);    /* 16px */
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color var(--duration-fast) var(--ease-out),
+                box-shadow var(--duration-fast) var(--ease-out);
+    background: var(--color-surface);
+}
+
+.signal-card:hover {
+    border-color: var(--color-hairline-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+.signal-ready {
+    border-left: 3px solid var(--miro-success);
+}
+
+.signal-watch {
+    border-left: 3px solid var(--miro-coral);
+}
+
+.signal-rejected {
+    border-left: 3px solid var(--color-hairline-strong);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * ALERT ROWS
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.alert-row {
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-lg);    /* 12px */
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--color-surface);
+    transition: border-color var(--duration-fast) var(--ease-out);
+}
+
+.alert-row:hover {
+    border-color: var(--color-hairline-strong);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * CHARTS
+ * ═══════════════════════════════════════════════════════════════════════ */
 
 .chart-box {
     width: 100%;
-    height: 260px;
+    height: 280px;
 }
 
 .chart-box-lg {
-    height: 360px;
+    height: 380px;
 }
 
 .advanced-chart-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 220px;
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 16px;
 }
 
 .advanced-chart-stack {
@@ -141,47 +628,49 @@ body.app-body {
 
 .main-chart-pane {
     height: 560px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-md);
     overflow: hidden;
+    background: var(--color-canvas);
 }
 
 .sub-chart-pane {
-    margin-top: 6px;
+    margin-top: 8px;
     height: 140px;
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-md);
     overflow: hidden;
+    background: var(--color-canvas);
 }
 
 .indicator-sidebar {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px;
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-lg);
+    padding: 14px;
     height: fit-content;
-    background: #0f111a;
+    background: var(--color-surface);
 }
 
 .indicator-toggles {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 6px;
 }
 
 .indicator-toggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: 1px solid var(--border);
-    background: #0f111a;
-    color: var(--text-dim);
-    border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 12px;
+    border: 1px solid var(--color-hairline);
+    background: var(--color-surface);
+    color: var(--color-charcoal);
+    border-radius: var(--rounded-sm);
+    padding: 4px 8px;
+    font-size: 11px;
 }
 
 .indicator-toggle input {
-    accent-color: var(--cyan);
+    accent-color: var(--miro-blue);
 }
 
 .indicator-item {
@@ -189,130 +678,138 @@ body.app-body {
     justify-content: space-between;
     gap: 8px;
     padding: 6px 0;
-    border-bottom: 1px solid var(--border);
-    font-size: 12px;
+    border-bottom: 1px solid var(--color-hairline-soft);
+    font-size: 11px;
 }
 
 .indicator-item .label {
-    color: var(--text-muted);
+    color: var(--color-steel);
 }
 
-.text-muted {
-    color: var(--text-muted);
-}
-
-.text-link {
-    color: var(--cyan);
-    text-decoration: none;
-}
-
-.btn-primary {
-    border: 1px solid var(--cyan);
-    color: #021a1f;
-    background: var(--cyan);
-    padding: 8px 14px;
-    border-radius: 10px;
-}
-
-.btn-filter {
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    background: transparent;
-    padding: 6px 12px;
-    border-radius: 8px;
-}
-
-.btn-filter.active, .btn-filter:hover {
-    border-color: var(--cyan);
-    color: var(--text);
-}
-
-.progress-track {
-    width: 100%;
-    height: 10px;
-    border-radius: 999px;
-    background: #0f1320;
-    border: 1px solid var(--border);
-}
-
-.progress-bar {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, var(--cyan), var(--green));
-    transition: width 0.25s ease;
-}
-
-.signal-card {
-    border: 1px solid var(--border);
-    border-left: 3px solid #4b5563;
-    border-radius: 12px;
-    padding: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    background: var(--bg-card);
-}
-
-.signal-card:hover {
-    border-color: var(--cyan);
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.1);
-    transform: translateY(-2px);
-}
-
-.signal-ready {
-    border-left-color: var(--green);
-    box-shadow: -3px 0 15px rgba(0, 255, 136, 0.2);
-}
-
-.signal-watch {
-    border-left-color: var(--orange);
-}
-
-.signal-rejected {
-    border-left-color: #6b7280;
-}
-
-.alert-row {
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 10px;
-    display: grid;
-    gap: 4px;
-    background: #0f111a;
-}
+/* ═══════════════════════════════════════════════════════════════════════
+ * LIVE DOT & ANIMATIONS
+ * ═══════════════════════════════════════════════════════════════════════ */
 
 .live-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 999px;
-    background: var(--green);
-    animation: blink 1.5s infinite;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--rounded-full);
+    background: var(--miro-success);
+    animation: blink 2s infinite;
+    flex-shrink: 0;
 }
 
 @keyframes blink {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    50%       { opacity: 0.3; }
 }
 
 .fade-in {
-    animation: fadeIn 0.35s ease;
+    animation: fadeIn var(--duration-normal) var(--ease-out);
 }
 
 .skeleton {
-    background: linear-gradient(90deg, #1e1e2e 25%, #2a2a3e 50%, #1e1e2e 75%);
+    background: linear-gradient(90deg,
+        var(--color-surface) 25%,
+        var(--color-surface-soft) 50%,
+        var(--color-surface) 75%
+    );
     background-size: 200% 100%;
     animation: shimmer 1.5s infinite;
-    border-radius: 8px;
+    border-radius: var(--rounded-md);
     height: 200px;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes shimmer {
-    0% { background-position: 200% 0; }
+    0%   { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * PLAN CARDS
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.plan-card {
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-xl);
+    padding: 16px;
+    background: var(--color-surface);
+    transition: border-color var(--duration-fast) var(--ease-out),
+                box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.plan-card:hover {
+    border-color: var(--color-hairline-strong);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * PROGRESS
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.progress-track {
+    width: 100%;
+    height: 6px;
+    border-radius: var(--rounded-full);
+    background: var(--color-surface-soft);
+    border: 1px solid var(--color-hairline-soft);
+}
+
+.progress-bar {
+    height: 100%;
+    border-radius: var(--rounded-full);
+    background: var(--color-primary);
+    transition: width 0.2s var(--ease-out);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * TEXT UTILITIES
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.text-muted {
+    color: var(--color-steel);
+}
+
+.text-success { color: var(--miro-success); }
+.text-warning { color: #F59E0B; }
+.text-error, .text-danger { color: #EF4444; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * COMPARISON TABLE — design.md §Tables
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+.comparison-table {
+    background: var(--color-surface);
+    border: 1px solid var(--color-hairline);
+    border-radius: var(--rounded-lg);
+    font-size: var(--type-body-sm);
+}
+
+.comparison-row {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--color-hairline-soft);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comparison-row:last-child {
+    border-bottom: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * RESPONSIVE
+ * ═══════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 1024px) {
+    .advanced-chart-layout {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 900px) {
@@ -321,9 +818,24 @@ body.app-body {
     }
     .sidebar {
         border-right: none;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--color-hairline);
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 12px 16px;
     }
-    .advanced-chart-layout {
-        grid-template-columns: 1fr;
+    .side-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+    .brand {
+        margin-bottom: 0;
+        margin-right: 16px;
+    }
+}
+
+@media (max-width: 480px) {
+    .main-panel {
+        padding: 16px;
     }
 }

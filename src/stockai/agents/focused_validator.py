@@ -80,7 +80,7 @@ class FocusedValidator:
 
     def __init__(
         self,
-        model_name: str = "gemini-3-flash-preview",
+        model_name: str = "gemini-2.0-flash",
         timeout: float = 30.0,
     ):
         """Initialize the focused validator.
@@ -123,8 +123,8 @@ class FocusedValidator:
             logger.warning(f"Technical analyst error: {e}")
             tech_decision = AgentDecision(
                 agent_name="technical",
-                decision="APPROVE",
-                reason="Agent error - defaulting to approve",
+                decision="REJECT",
+                reason=f"Agent error - defaulting to reject for safety: {e}",
             )
 
         if tech_decision.decision == "REJECT":
@@ -144,8 +144,8 @@ class FocusedValidator:
             logger.warning(f"Fundamental analyst error: {e}")
             fund_decision = AgentDecision(
                 agent_name="fundamental",
-                decision="APPROVE",
-                reason="Agent error - defaulting to approve",
+                decision="REJECT",
+                reason=f"Agent error - defaulting to reject for safety: {e}",
             )
 
         if fund_decision.decision == "REJECT":
@@ -164,8 +164,8 @@ class FocusedValidator:
             logger.warning(f"Risk manager error: {e}")
             risk_decision = AgentDecision(
                 agent_name="risk",
-                decision="APPROVE",
-                reason="Agent error - defaulting to approve",
+                decision="REJECT",
+                reason=f"Agent error - defaulting to reject for safety: {e}",
             )
 
         if risk_decision.decision == "REJECT":
@@ -355,7 +355,7 @@ async def validate_with_focused_agents(
     analysis: AnalysisResult,
     fundamentals: dict[str, Any] | None = None,
     capital: float = 10_000_000,
-    model_name: str = "gemini-3-flash-preview",
+    model_name: str = "gemini-2.0-flash",
 ) -> FocusedValidationResult:
     """Convenience function to validate a signal with focused agents.
 

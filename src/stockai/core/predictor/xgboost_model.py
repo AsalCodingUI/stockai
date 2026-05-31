@@ -14,6 +14,11 @@ import pandas as pd
 
 try:
     import xgboost as xgb
+    # Patch for compatibility with scikit-learn >= 1.6/1.8 where _estimator_type is not defined on ClassifierMixin anymore
+    if hasattr(xgb, "XGBClassifier") and not hasattr(xgb.XGBClassifier, "_estimator_type"):
+        xgb.XGBClassifier._estimator_type = "classifier"
+    if hasattr(xgb, "XGBRegressor") and not hasattr(xgb.XGBRegressor, "_estimator_type"):
+        xgb.XGBRegressor._estimator_type = "regressor"
     HAS_XGBOOST = True
 except ImportError:
     HAS_XGBOOST = False

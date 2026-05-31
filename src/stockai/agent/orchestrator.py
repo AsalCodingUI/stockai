@@ -91,12 +91,11 @@ class StockAIAgent:
 
         # Map model names to Gemini model IDs
         model_mapping = {
-            "gemini-3-flash-preview": "gemini-2.0-flash",
             "gemini-flash": "gemini-2.0-flash",
-            "gemini-pro": "gemini-pro",
+            "gemini-pro": "gemini-2.5-pro",
         }
 
-        model_id = model_mapping.get(self.model_name, "gemini-2.0-flash")
+        model_id = model_mapping.get(self.model_name, self.model_name if self.model_name.startswith("gemini-") else "gemini-2.0-flash")
 
         return ChatGoogleGenerativeAI(
             model=model_id,

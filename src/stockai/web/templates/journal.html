@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Signal Performance — StockAI{% endblock %}
+
+{% block content %}
+<!-- Stats Bar -->
+<section class="grid gap-4 md:grid-cols-5 mb-6">
+  <article class="stat-card">
+    <div class="stat-label">TOTAL SIGNALS</div>
+    <div class="stat-value" id="j-total" style="color:var(--color-ink)">—</div>
+  </article>
+  <article class="stat-card">
+    <div class="stat-label">ACTIVE</div>
+    <div class="stat-value" id="j-open" style="color:#F59E0B">—</div>
+  </article>
+  <article class="stat-card">
+    <div class="stat-label">WIN RATE</div>
+    <div class="stat-value" id="j-winrate" style="color:var(--miro-success)">—</div>
+  </article>
+  <article class="stat-card">
+    <div class="stat-label">AVG P&L</div>
+    <div class="stat-value" id="j-avgpnl">—</div>
+  </article>
+  <article class="stat-card">
+    <div class="stat-label">WINS / LOSSES</div>
+    <div class="stat-value" id="j-wl" style="color:var(--color-charcoal)">—</div>
+  </article>
+</section>
+
+<!-- Main Grid -->
+<div class="grid gap-5 md:grid-cols-3">
+
+  <!-- Left: Signals Lists -->
+  <div class="md:col-span-2 flex flex-col gap-5">
+    <section class="card">
+      <!-- Pill tabs — design.md pill-tab pattern -->
+      <div class="flex items-center gap-2 mb-5">
+        <button id="tab-open" onclick="switchTab('open')" class="pill-tab active">
+          <i class="ph ph-lightning text-xs"></i> Active Signals
+        </button>
+        <button id="tab-history" onclick="switchTab('history')" class="pill-tab">
+          <i class="ph ph-clock-counter-clockwise text-xs"></i> Past Performance
+        </button>
+        <div class="ml-auto flex gap-2">
+          <select id="filter-status" onchange="loadHistory()"
+            style="
+              padding:6px 10px;
+              background:var(--color-surface-soft);
+              border:1px solid var(--color-hairline-strong);
+              border-radius:var(--rounded-full);
+              font-size:12px;
+              color:var(--color-charcoal);
+              outline:none;
+              display:none;
+            ">
+            <option value="">Semua Status</option>
+            <option value="TP1_HIT">Target 1 Hit</option>
+            <option value="TP2_HIT">Target 2 Hit</option>
+            <option value="TP3_HIT">Target 3 Hit</option>
+            <option value="SL_HIT">Stop Loss Hit</option>
+            <option value="MANUAL_CLOSE">Closed</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Open Recommendations Panel -->
+      <div id="panel-open">
+        <div id="open-plans-list" class="flex flex-col gap-3">
+          <div style="color:var(--color-steel);font-size:12px;font-family:var(--font-family-mono)">Memuat active signals...</div>
+        </div>
+      </div>
+
+      <!-- History Panel -->
+      <div id="panel-history" style="display:none">
+        <div id="history-list" class="flex flex-col gap-2 overflow-x-auto">
+          <div style="color:var(--color-steel);font-size:12px;font-family:var(--font-family-mono)">Memuat riwayat...</div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Right: Performance Charts & AI Summary -->
+  <div class="flex flex-col gap-5">
+    <!-- Win Rate Doughnut — yellow pastel card -->
+    <section class="card">
+      <div class="section-title mb-4">
+        <i class="ph ph-chart-pie mr-1.5 align-middle"></i> Historical Win Rate
+      </div>
+      <div style="position:relative;height:180px;display:flex;align-items:center;justify-content:center;">
+        <canvas id="win-rate-chart"></canvas>
+        <div id="wr-center" style="position:absolute;text-align:center;pointer-events:none">
+          <div id="wr-pct" style="font-size:24px;font-weight:500;font-family:var(--font-family-mono);color:var(--miro-success)">—</div>
+          <div style="font-size:10px;font-weight:600;color:var(--color-steel);text-transform:uppercase;letter-spacing:0.5px">win rate</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- P&L Bar Chart -->
+    <section class="card">
+      <div class="section-title mb-4">
+        <i class="ph ph-chart-bar-horizontal mr-1.5 align-middle"></i> Gain/Loss per Signal
+      </div>
+      <canvas id="pnl-chart" style="max-height:160px;"></canvas>
+    </section>
+
+    <!-- AI Coach Feedback — rose pastel card -->
+    <section class="card-feature-rose card-feature" style="padding:var(--spacing-xl)">
+      <div class="flex items-center justify-between mb-4">
+        <div class="section-title" style="margin-bottom:0;color:var(--miro-rose)">
+          <i class="ph ph-robot mr-1.5 align-middle"></i> AI Performance Feedback
+        </div>
+        <button onclick="loadAIFeedback()" id="btn-ai-feedback" class="btn-secondary" style="font-size:11px;padding:5px 14px">
+          <i class="ph ph-lightning mr-1 align-middle"></i> Analisa
+        </button>
+      </div>
+      <div id="ai-feedback-panel" style="font-size:13px;color:var(--color-charcoal);line-height:1.6">
+        Klik "Analisa" untuk melihat ulasan performa dan efektivitas rotasi modal dari AI Coach.
+      </div>
+    </section>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/journal.js?v=2"></script>
+{% endblock %}

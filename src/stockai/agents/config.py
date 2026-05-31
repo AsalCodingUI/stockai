@@ -12,7 +12,7 @@ class AgentConfig:
     """Configuration for the multi-agent system."""
 
     # Model settings
-    model: str = "gemini/gemini-3-flash-preview"
+    model: str = "gemini/gemini-2.0-flash"
     temperature: float = 0.3
     max_tokens: int = 4096
     thinking_level: str = "HIGH"  # Options: MINIMAL, LOW, MEDIUM, HIGH

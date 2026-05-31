@@ -32,13 +32,19 @@ class Settings(BaseSettings):
     twelve_data_api_key: str = Field(default="", alias="TWELVE_DATA_API_KEY")
 
     # Model settings
-    model: str = Field(default="gemini-3-flash-preview", description="Default LLM model")
+    model: str = Field(default="gemini-2.0-flash", description="Default LLM model")
 
     # Database
     db_path: str = Field(default="data/stockai.db", description="SQLite database path")
 
-    # Cache
-    cache_ttl: int = Field(default=900, description="Cache TTL in seconds")
+    # Cache — default and per-data-type TTLs
+    cache_ttl: int = Field(default=900, description="Default cache TTL in seconds")
+    cache_ttl_price: int = Field(default=120, description="Cache TTL for price/OHLCV data (seconds)")
+    cache_ttl_fundamental: int = Field(default=86400, description="Cache TTL for fundamental data (24 h)")
+    cache_ttl_sentiment: int = Field(default=1800, description="Cache TTL for sentiment data (30 min)")
+
+    # LLM timeouts
+    llm_timeout: int = Field(default=30, description="Timeout in seconds for LLM API calls")
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")
@@ -97,20 +103,19 @@ def get_settings() -> Settings:
 
 # Model mapping for LangChain
 MODEL_MAP = {
-    # Google Gemini models
-    "gemini-3-flash-preview": "google_genai:gemini-3-flash-preview",
-    "gemini-3-pro-preview": "google_genai:gemini-3-pro-preview",
-    "gemini-2.5-flash": "google_genai:gemini-2.5-flash",
+    # Google Gemini
     "gemini-2.5-pro": "google_genai:gemini-2.5-pro",
+    "gemini-2.5-flash": "google_genai:gemini-2.5-flash",
     "gemini-2.0-flash": "google_genai:gemini-2.0-flash",
     "gemini-2.0-flash-lite": "google_genai:gemini-2.0-flash-lite",
-    # OpenAI models
+    # OpenAI
     "gpt-4o": "openai:gpt-4o",
     "gpt-4": "openai:gpt-4",
     "gpt-4-turbo": "openai:gpt-4-turbo",
-    # Anthropic models
+    # Anthropic
     "claude-sonnet": "anthropic:claude-3-5-sonnet-20241022",
     "claude-opus": "anthropic:claude-3-opus-20240229",
+    "claude-haiku": "anthropic:claude-3-haiku-20240307",
 }
 
 

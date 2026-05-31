@@ -184,6 +184,7 @@ class TradingOrchestrator:
             temperature=self.config.temperature,
             max_tokens=self.config.max_tokens,
             convert_system_message_to_human=True,
+            request_timeout=settings.llm_timeout,
             model_kwargs=generation_config if generation_config else None,
         )
 

@@ -1,113 +1,32 @@
 """Focused Agent Prompts for Efficient Validation.
 
-Simplified prompts for 3-agent validation pipeline.
+Loads simplified prompts for the 3-agent validation pipeline from YAML files.
 Each agent has a specific, narrow focus and returns a simple APPROVE/REJECT decision.
 """
 
 import re
+from pathlib import Path
 
-# =============================================================================
-# Technical Analyst - Validates Entry Point Quality
-# =============================================================================
+import yaml
 
-TECHNICAL_ANALYST_PROMPT = """You are validating a potential BUY signal for {ticker}.
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
 
-PRE-COMPUTED DATA:
-- Technical Score: {tech_score:.1f}/100
-- RSI (14-day): {rsi:.1f}
-- MACD Signal: {macd_signal}
-- ADX: {adx:.1f} ({trend_strength})
-- Price vs SMA20: {pct_above_sma20:+.1f}%
-- Distance to Support: {support_distance:.1f}%
-- Distance to Resistance: {resistance_distance:.1f}%
-- Current Price: Rp {current_price:,.0f}
-
-YOUR TASK: Validate this is a good ENTRY POINT.
-
-CHECK THESE CRITERIA:
-1. Is price near support (within 5%)? - Currently {support_distance:.1f}%
-2. Is trend favorable (price above or near SMA20)?
-3. Is momentum positive (MACD bullish or neutral)?
-4. Is there room to resistance (at least 5% upside)?
-5. Is RSI not overbought (< 70)?
-
-IMPORTANT: Be decisive. Moderate conditions are acceptable if other factors are strong.
-
-OUTPUT (exactly this format):
-DECISION: APPROVE or REJECT
-REASON: One sentence explaining the key factor"""
+IDX_QUICK_CONTEXT = """Konteks: Saham IDX (Indonesia). Harga dalam IDR, lot=100 lembar, jam trading 09:00-16:00 WIB.
+Sektor: Banking (BBCA/BBRI/BMRI), Consumer (UNVR/ICBP), Mining (ADRO/ITMG), Telco (TLKM/EXCL).
+Foreign flow asing = sinyal penting. Waspadai saham gorengan (volume anomali, free float kecil)."""
 
 
-# =============================================================================
-# Fundamental Analyst - Validates Financial Health
-# =============================================================================
-
-FUNDAMENTAL_ANALYST_PROMPT = """You are validating a potential BUY signal for {ticker}.
-
-PRE-COMPUTED DATA:
-- Fundamental Score: {fund_score:.1f}/100
-- P/E Ratio: {pe_ratio}
-- P/B Ratio: {pb_ratio}
-- ROE: {roe}%
-- Debt-to-Equity: {debt_to_equity}
-- Profit Margin: {profit_margin}%
-- Sector: {sector}
-
-YOUR TASK: Validate the company is financially healthy for investment.
-
-CHECK THESE CRITERIA:
-1. Is P/E reasonable (< 25 for growth, < 15 for value)?
-2. Is P/B not extremely high (< 5)?
-3. Is ROE positive and reasonable (> 10% preferred)?
-4. Is debt manageable (D/E < 1.5 for most sectors)?
-5. Is the company profitable (positive margin)?
-
-IMPORTANT: Missing data is acceptable if available data looks strong.
-Indonesian banking stocks may have higher D/E ratios - this is normal.
-
-OUTPUT (exactly this format):
-DECISION: APPROVE or REJECT
-REASON: One sentence explaining the key factor"""
+def _load_prompt(name: str) -> str:
+    """Load a system_prompt template string from a YAML file."""
+    yaml_path = _PROMPTS_DIR / f"{name}.yaml"
+    with yaml_path.open(encoding="utf-8") as f:
+        data = yaml.safe_load(f)
+    return data["system_prompt"].rstrip()
 
 
-# =============================================================================
-# Risk Manager - Validates Risk/Reward Profile
-# =============================================================================
-
-RISK_MANAGER_PROMPT = """You are validating a potential BUY signal for {ticker}.
-
-TRADE PLAN:
-- Entry Range: Rp {entry_low:,.0f} - Rp {entry_high:,.0f}
-- Stop Loss: Rp {stop_loss:,.0f} ({stop_loss_pct:.1f}% risk)
-- Take Profit 1: Rp {tp1:,.0f} ({tp1_pct:.1f}% gain)
-- Take Profit 2: Rp {tp2:,.0f} ({tp2_pct:.1f}% gain)
-- Take Profit 3: Rp {tp3:,.0f} ({tp3_pct:.1f}% gain)
-- Risk/Reward Ratio: {rr_ratio:.2f}
-
-POSITION SIZING (2% risk rule):
-- Recommended Lots: {lots}
-- Position Value: Rp {position_value:,.0f}
-- Max Loss: Rp {max_loss:,.0f}
-
-MARKET CONTEXT:
-- Smart Money Score: {smart_money:.1f} ({smart_money_interpretation})
-- ADX Trend Strength: {adx:.1f} ({trend_strength})
-- Gates Passed: {gates_passed}/6
-
-YOUR TASK: Validate the trade has acceptable risk/reward.
-
-CHECK THESE CRITERIA:
-1. Is Risk/Reward ratio at least 1.5:1?
-2. Is position size reasonable (not over-leveraged)?
-3. Is Smart Money showing accumulation (score >= 2)?
-4. Is stop loss logically placed (near support)?
-5. Are take profit targets achievable?
-
-IMPORTANT: A good risk/reward ratio can compensate for moderate scores elsewhere.
-
-OUTPUT (exactly this format):
-DECISION: APPROVE or REJECT
-REASON: One sentence explaining the key factor"""
+TECHNICAL_ANALYST_PROMPT = _load_prompt("focused_technical_analyst")
+FUNDAMENTAL_ANALYST_PROMPT = _load_prompt("focused_fundamental_analyst")
+RISK_MANAGER_PROMPT = _load_prompt("focused_risk_manager")
 
 
 # =============================================================================

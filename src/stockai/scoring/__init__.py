@@ -32,6 +32,7 @@ from stockai.scoring.trade_plan import (
     calculate_position_with_plan,
 )
 from stockai.scoring.analyzer import AnalysisResult, analyze_stock
+from stockai.scoring.intelligence import IntelligenceResult, run_intelligence_pipeline
 
 __all__ = [
     "calculate_value_score",
@@ -60,4 +61,6 @@ __all__ = [
     "calculate_position_with_plan",
     "AnalysisResult",
     "analyze_stock",
+    "IntelligenceResult",
+    "run_intelligence_pipeline",
 ]

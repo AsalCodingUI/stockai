@@ -54,6 +54,8 @@ def calculate_smart_money_score(
 
     # Calculate average volume
     avg_volume = recent["volume"].mean()
+    if avg_volume == 0 or pd.isna(avg_volume):
+        avg_volume = 1.0  # Prevent division by zero for zero-volume or suspended stocks
 
     # Volume ratio (current vs average)
     recent["volume_ratio"] = recent["volume"] / avg_volume

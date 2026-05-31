@@ -12,6 +12,7 @@ Coordinates the daily trading workflow:
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, date
 from decimal import Decimal
@@ -34,9 +35,12 @@ from stockai.core.ml.probability import ProbabilityEngine
 from stockai.scoring.factors import score_stock, FactorScores
 from stockai.scoring.signals import SignalGenerator, Signal, SignalType
 from stockai.scoring.analyzer import analyze_stock, AnalysisResult
+from stockai.scoring.intelligence import IntelligenceResult, run_intelligence_pipeline
 from stockai.scoring.gates import GateConfig
 from stockai.risk.position_sizing import calculate_position_size, PositionSize
 from stockai.agents.focused_validator import FocusedValidator, FocusedValidationResult
+from stockai.scoring.rule_engine import RuleEngine, RuleEngineConfig, LayerScore
+from stockai.core.regime import RegimeEngine, MarketRegime, RegimeResult
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +83,9 @@ class AutopilotConfig:
     smart_money_version: str = "v1"
     # Gate preset toggle
     gate_preset: str = "default"
+
+    # Rule Confluence configuration
+    rule_engine_config: RuleEngineConfig = field(default_factory=RuleEngineConfig)
 
     # Execution mode
     dry_run: bool = False
@@ -148,6 +155,7 @@ class TradeSignal:
     gate_rejection_reasons: list[str] = field(default_factory=list)  # Rejection reasons
     gate_confidence: str | None = None  # HIGH, WATCH, REJECTED
     analysis_result: AnalysisResult | None = None  # Full analysis result
+    intelligence_result: IntelligenceResult | None = None  # Post-gate intelligence layer
 
     # AI Validation fields
     ai_validated: bool = False  # Has been validated by AI
@@ -157,6 +165,11 @@ class TradeSignal:
     ai_rejection_reason: str | None = None  # Reason if rejected
     ai_key_reasons: list[str] = field(default_factory=list)  # AI insights
     ai_risk_factors: list[str] = field(default_factory=list)  # AI risks
+
+    # Rule Confluence fields
+    layer_score: LayerScore | None = None
+    grade: str = "NO TRADE"
+
 
 
 @dataclass
@@ -188,6 +201,9 @@ class AutopilotResult:
 
     # Monitor mode flag
     is_monitor_mode: bool = False
+
+    # Regime Result
+    regime: RegimeResult | None = None
 
     # Scan results
     stocks_scanned: int = 0
@@ -304,6 +320,11 @@ class AutopilotEngine:
             return self._run_monitor_mode(result)
 
         # NORMAL MODE: Full autopilot workflow
+        self.current_regime = RegimeEngine().get_current_regime()
+        result.regime = self.current_regime
+        logger.info(f"Market Regime: {self.current_regime.regime.value} | Bias: {self.current_regime.action_bias} | Note: {self.current_regime.regime_note}")
+        self.config.buy_threshold = self.current_regime.min_score_override
+
         # Phase 1: SCAN
         logger.info(f"Scanning {self.config.index.value} stocks...")
         symbols = self._get_index_symbols()
@@ -512,13 +533,7 @@ class AutopilotEngine:
         ]
 
         # Run async validation
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        validation_results = loop.run_until_complete(
+        validation_results = asyncio.run(
             self.ai_validator.validate_signals_batch(validation_requests)
         )
 
@@ -572,26 +587,62 @@ class AutopilotEngine:
 
         for signal in buy_signals:
             try:
-                # Fetch price history for analysis
-                df = self.yahoo_source.get_price_history(signal.symbol, period="3mo")
-                if df is None or df.empty or len(df) < 20:
-                    signal.gate_rejection_reasons = ["Insufficient price history"]
+                # Fetch price history for analysis (need 6mo for RuleEngine 50+ bar count)
+                df = self.yahoo_source.get_price_history(signal.symbol, period="6mo")
+                if df is None or df.empty or len(df) < 50:
+                    signal.gate_rejection_reasons = ["Insufficient price history (need >=50 bars)"]
                     signal.gate_confidence = "REJECTED"
                     signal.gates_passed = 0
                     rejected.append(signal)
                     logger.info(f"{signal.symbol}: Gate REJECTED - Insufficient data")
                     continue
 
-                # Run full analysis
+                # ── Rule Confluence check ─────────────────────────────────────
+                rule_engine = RuleEngine(self.config.rule_engine_config)
+                info = self.yahoo_source.get_stock_info(signal.symbol) or {}
+                fundamentals = {
+                    "pe_ratio": info.get("pe_ratio"),
+                    "pb_ratio": info.get("pb_ratio"),
+                    "roe": info.get("roe"),
+                    "debt_to_equity": info.get("debt_to_equity"),
+                    "profit_margin": info.get("profit_margin"),
+                    "revenue_growth": info.get("revenue_growth"),
+                }
+                flow_signal = self.foreign_flow_monitor.get_flow_signal(signal.symbol, days=5)
+                sentiment_signal = self.sentiment_monitor.analyze(signal.symbol)
+
+                layer_score = rule_engine.evaluate(
+                    symbol=signal.symbol,
+                    df=df,
+                    fundamentals=fundamentals,
+                    flow_signal=flow_signal,
+                    sentiment=sentiment_signal,
+                )
+
+                signal.layer_score = layer_score
+                signal.grade = layer_score.grade
+
+                if layer_score.grade == "NO TRADE":
+                    signal.gate_rejection_reasons = [f"Rule Engine: NO TRADE ({layer_score.total_score:.0f}/100)"]
+                    signal.gate_confidence = "REJECTED"
+                    signal.gates_passed = 0
+                    rejected.append(signal)
+                    logger.info(
+                        f"{signal.symbol}: Early rejection by RuleEngine - grade NO TRADE "
+                        f"({layer_score.total_score:.0f}/100)"
+                    )
+                    continue
+
+                # Run full analysis (secondary validation)
                 analysis = analyze_stock(
                     ticker=signal.symbol,
                     df=df,
-                    fundamentals=None,  # Could fetch fundamentals here
+                    fundamentals=fundamentals,
                     config=gate_config,
                     smart_money_version=smv,
-                    foreign_flow_signal=self.foreign_flow_monitor.get_flow_signal(signal.symbol, days=5),
+                    foreign_flow_signal=flow_signal,
                     unusual_volume_signal=self.volume_detector.detect(signal.symbol, history=df),
-                    sentiment_signal=self.sentiment_monitor.analyze(signal.symbol),
+                    sentiment_signal=sentiment_signal,
                 )
 
                 # Update signal with gate results
@@ -609,7 +660,10 @@ class AutopilotEngine:
                 signal.analysis_result = analysis
 
                 # Update stop_loss and target from trade plan if available
-                if analysis.trade_plan:
+                if layer_score.trade_plan:
+                    signal.stop_loss = layer_score.trade_plan.stop_loss
+                    signal.target = layer_score.trade_plan.tp1
+                elif analysis.trade_plan:
                     signal.stop_loss = analysis.trade_plan.stop_loss
                     signal.target = analysis.trade_plan.take_profit_1
                 # Provide fallback SL/Target for WATCH/REJECTED signals
@@ -630,17 +684,31 @@ class AutopilotEngine:
                     logger.info(f"{signal.symbol}: Skipped due to R/R < {MIN_RISK_REWARD} (was {rr:.2f})")
                     continue
 
-                if signal.gate_confidence in ("HIGH", "WATCH"):
+                # Intelligence pipeline runs after the existing gates.
+                intelligence = run_intelligence_pipeline(
+                    signal.symbol,
+                    analysis_result=analysis,
+                    existing_score=signal.score,
+                    yahoo=self.yahoo_source,
+                )
+                signal.intelligence_result = intelligence
+
+                if signal.gate_confidence in ("HIGH", "WATCH") and intelligence.recommendation == "EXECUTE":
                     qualified.append(signal)
                     logger.info(
                         f"{signal.symbol}: Gate {signal.gate_confidence} {signal.gates_passed}/{analysis.gates.total_gates} "
+                        f"| Intel {intelligence.confidence_level} {intelligence.confidence_score:.0f} "
                         f"(Smart Money: {analysis.smart_money.score:.1f}, ADX: {analysis.adx.get('adx', 0):.1f})"
                     )
                 else:
+                    reason = f"Intelligence {intelligence.recommendation} ({intelligence.confidence_score:.0f})"
+                    if intelligence.news_status == "RISK_DETECTED" and intelligence.news_risk_reason:
+                        reason = intelligence.news_risk_reason
+                    signal.gate_rejection_reasons = signal.gate_rejection_reasons + [reason]
                     rejected.append(signal)
                     logger.info(
-                        f"{signal.symbol}: Gate REJECTED {signal.gates_passed}/{analysis.gates.total_gates} - "
-                        f"{', '.join(analysis.gates.rejection_reasons[:2])}"
+                        f"{signal.symbol}: Filtered out - gate {signal.gate_confidence}, "
+                        f"intel {intelligence.recommendation} {intelligence.confidence_score:.0f}"
                     )
 
             except Exception as e:
@@ -683,13 +751,6 @@ class AutopilotEngine:
         approved = []
         rejected = []
 
-        # Get event loop
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
         validator = FocusedValidator(timeout=30.0)
 
         for signal in signals:
@@ -718,7 +779,7 @@ class AutopilotEngine:
 
             # Run focused validation
             try:
-                result: FocusedValidationResult = loop.run_until_complete(
+                result: FocusedValidationResult = asyncio.run(
                     validator.validate(
                         signal.analysis_result,
                         fundamentals=fundamentals,
@@ -749,11 +810,12 @@ class AutopilotEngine:
                     )
 
             except asyncio.TimeoutError:
-                logger.warning(f"{signal.symbol}: AI validation timed out, defaulting to approve")
+                logger.warning(f"{signal.symbol}: AI validation timed out, defaulting to reject")
                 signal.ai_validated = True
-                signal.ai_approved = True
-                signal.ai_recommendation = "APPROVE - Timeout, defaulted"
-                approved.append(signal)
+                signal.ai_approved = False
+                signal.ai_recommendation = "REJECT - Timeout, defaulted for safety"
+                signal.ai_rejection_reason = "Validation timed out"
+                rejected.append(signal)
             except Exception as e:
                 logger.error(f"{signal.symbol}: AI validation error: {e}")
                 signal.ai_validated = False
@@ -772,13 +834,7 @@ class AutopilotEngine:
         ]
 
         # Run async validation
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        validation_results = loop.run_until_complete(
+        validation_results = asyncio.run(
             self.ai_validator.validate_signals_batch(validation_requests)
         )
 
@@ -982,21 +1038,19 @@ class AutopilotEngine:
             except ImportError:
                 logger.info(f"Sources - JII70: {len(jii70_syms)} | LQ45: {len(lq45_syms)} | IDX30: {len(idx30_syms)} | IDX80: {len(idx80_syms)} | Extra: {len(extra_syms)} | Unique: {len(all_symbols)}")
 
-            liquid_symbols = []
             logger.info(f"Filtering {len(all_symbols)} stocks for daily transaction value > Rp 500 Million...")
-            
-            for symbol in all_symbols:
+            all_symbols_list = list(all_symbols)
+            prices_map = self.yahoo_source.get_multiple_prices(all_symbols_list)
+            liquid_symbols = []
+            for sym, price_info in prices_map.items():
                 try:
-                    price_info = self.yahoo_source.get_current_price(symbol)
-                    if price_info:
-                        price = price_info.get("price", 0)
-                        volume = price_info.get("volume", 0)
-                        # Value = Price * Volume > 500 Million
-                        if (price * int(volume)) > 500_000_000:
-                            liquid_symbols.append(symbol)
+                    price = price_info.get("price", 0)
+                    volume = price_info.get("volume", 0)
+                    if (price * int(volume)) > 500_000_000:
+                        liquid_symbols.append(sym)
                 except Exception:
                     pass
-            
+
             logger.info(f"Found {len(liquid_symbols)} liquid stocks > Rp 500M")
             return liquid_symbols
         return []
@@ -1107,60 +1161,68 @@ class AutopilotEngine:
             signal.pattern_count = int(forecast.get("pattern_count", 0) or 0)
             signal.patterns_detected = list(forecast.get("patterns_detected", []) or [])
 
+    def _score_single_stock(self, symbol: str) -> FactorScores | None:
+        """Fetch data and score a single stock.
+
+        Args:
+            symbol: Stock symbol to score
+
+        Returns:
+            FactorScores or None if data unavailable
+        """
+        try:
+            info = self.yahoo_source.get_stock_info(symbol)
+            if not info:
+                if self.yahoo_source.should_silent_skip(symbol):
+                    return None
+                logger.warning(f"No data for {symbol}, skipping")
+                return None
+
+            history = self.yahoo_source.get_price_history(symbol, period="6mo")
+            price_data = self._calculate_price_metrics(history)
+
+            fundamentals = {
+                "pe_ratio": info.get("pe_ratio"),
+                "pb_ratio": info.get("pb_ratio"),
+                "roe": info.get("roe"),
+                "debt_to_equity": info.get("debt_to_equity"),
+                "profit_margin": info.get("profit_margin"),
+                "revenue_growth": info.get("revenue_growth"),
+            }
+
+            return score_stock(
+                symbol=symbol,
+                fundamentals=fundamentals,
+                price_data=price_data,
+                foreign_flow_signal=self.foreign_flow_monitor.get_flow_signal(symbol, days=5),
+                unusual_volume_signal=self.volume_detector.detect(symbol, history=history),
+                sentiment_signal=self.sentiment_monitor.analyze(symbol),
+            )
+        except Exception as e:
+            logger.error(f"Error scanning {symbol}: {e}")
+            return None
+
     def _scan_stocks(self, symbols: list[str]) -> list[FactorScores]:
-        """Scan stocks and calculate factor scores.
+        """Scan stocks and calculate factor scores concurrently.
 
         Args:
             symbols: List of stock symbols to scan
 
         Returns:
-            List of FactorScores for each stock
+            List of FactorScores for each stock, sorted by composite score descending
         """
-        scores = []
+        scores: list[FactorScores] = []
 
-        for symbol in symbols:
-            try:
-                # Get stock info (fundamentals)
-                info = self.yahoo_source.get_stock_info(symbol)
-                if not info:
-                    if self.yahoo_source.should_silent_skip(symbol):
-                        continue
-                    logger.warning(f"No data for {symbol}, skipping")
-                    continue
+        # Use ThreadPoolExecutor for parallel I/O (Yahoo Finance calls)
+        max_workers = min(10, len(symbols))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(self._score_single_stock, sym): sym for sym in symbols}
+            for future in as_completed(futures):
+                result = future.result()
+                if result is not None:
+                    scores.append(result)
 
-                # Get price history for momentum
-                history = self.yahoo_source.get_price_history(symbol, period="6mo")
-
-                # Calculate returns
-                price_data = self._calculate_price_metrics(history)
-
-                # Prepare fundamentals
-                fundamentals = {
-                    "pe_ratio": info.get("pe_ratio"),
-                    "pb_ratio": info.get("pb_ratio"),
-                    "roe": None,  # Not available directly from Yahoo
-                    "debt_to_equity": None,
-                    "profit_margin": None,
-                }
-
-                # Score the stock
-                factor_scores = score_stock(
-                    symbol=symbol,
-                    fundamentals=fundamentals,
-                    price_data=price_data,
-                    foreign_flow_signal=self.foreign_flow_monitor.get_flow_signal(symbol, days=5),
-                    unusual_volume_signal=self.volume_detector.detect(symbol, history=history),
-                    sentiment_signal=self.sentiment_monitor.analyze(symbol),
-                )
-
-                scores.append(factor_scores)
-
-            except Exception as e:
-                logger.error(f"Error scanning {symbol}: {e}")
-
-        # Sort by composite score descending
         scores.sort(key=lambda x: x.composite_score, reverse=True)
-
         return scores
 
     def _calculate_price_metrics(self, history) -> dict[str, Any]:
@@ -1364,28 +1426,35 @@ class AutopilotEngine:
             if current_positions + len(sized_signals) >= self.config.max_positions:
                 break
 
-            # Calculate ATR-based stop-loss
-            history = self.yahoo_source.get_price_history(signal.symbol, period="1mo")
-            atr = self._calculate_atr(history)
+            stop_loss = signal.stop_loss
+            target = signal.target
 
-            if atr and atr > 0:
-                stop_loss = signal.current_price - (self.config.atr_multiplier * atr)
-            else:
-                # Fallback to 8% stop-loss
-                stop_loss = signal.current_price * 0.92
+            # Respect analysis-derived trade plan levels when already present.
+            if not stop_loss or not target:
+                history = self.yahoo_source.get_price_history(signal.symbol, period="1mo")
+                atr = self._calculate_atr(history)
 
-            # Calculate target (1.5x the stop distance)
-            stop_distance = signal.current_price - stop_loss
-            target = signal.current_price + (stop_distance * 1.5)
+                if atr and atr > 0:
+                    stop_loss = signal.current_price - (self.config.atr_multiplier * atr)
+                else:
+                    stop_loss = signal.current_price * 0.92
+
+                stop_distance = signal.current_price - stop_loss
+                target = signal.current_price + (stop_distance * 1.5)
 
             try:
-                # Calculate position size
-                pos_size = calculate_position_size(
+                # Calculate position size using dynamic grading and market regime sizing
+                from stockai.risk.position_sizing import calculate_dynamic_position_size
+                regime_val = self.current_regime.regime if hasattr(self, "current_regime") and self.current_regime else "NEUTRAL"
+
+                pos_size = calculate_dynamic_position_size(
                     capital=available_capital,
                     entry_price=signal.current_price,
                     stop_loss_price=stop_loss,
                     target_price=target,
                     symbol=signal.symbol,
+                    grade=signal.grade,
+                    regime=regime_val,
                     max_risk_percent=self.config.max_risk_percent,
                     max_position_percent=self.config.max_position_percent,
                 )
@@ -1618,7 +1687,6 @@ def format_monitor_result(result: AutopilotResult, verbose: bool = False) -> str
 
     return "\n".join(lines)
 
-
 def format_autopilot_result(result: AutopilotResult, verbose: bool = False) -> str:
     """Format autopilot result for CLI display.
 
@@ -1646,6 +1714,16 @@ def format_autopilot_result(result: AutopilotResult, verbose: bool = False) -> s
         tp2 = tp1 * 1.05
         rr = (tp1 - trade.current_price) / (trade.current_price - sl) if trade.current_price > sl else 0
         return f"      SL: {_format_price(sl)} (-5%) | TP1: {_format_price(tp1)} | TP2: {_format_price(tp2)} | R/R: 1:{rr:.1f}"
+
+    def _format_intelligence(trade: TradeSignal) -> str | None:
+        intel = trade.intelligence_result
+        if not intel:
+            return None
+        return (
+            f"      🧠 Intelligence: {intel.recommendation} | "
+            f"{intel.confidence_level} {intel.confidence_score:.0f}/100 | "
+            f"Regime {intel.regime} | MTF {intel.mtf_aligned}/3 | RS {intel.relative_strength:.2f}"
+        )
 
     def _format_score_summary(trade: TradeSignal) -> str:
         factor_scores = trade.factor_scores
@@ -1816,6 +1894,9 @@ def format_autopilot_result(result: AutopilotResult, verbose: bool = False) -> s
                 foreign_line = _format_foreign_flow(trade)
                 if foreign_line:
                     lines.append(foreign_line)
+                intel_line = _format_intelligence(trade)
+                if intel_line:
+                    lines.append(intel_line)
                 volume_line = _format_volume_spike(trade)
                 if volume_line:
                     lines.append(volume_line)
@@ -1845,6 +1926,9 @@ def format_autopilot_result(result: AutopilotResult, verbose: bool = False) -> s
                 foreign_line = _format_foreign_flow(trade)
                 if foreign_line:
                     lines.append(foreign_line)
+                intel_line = _format_intelligence(trade)
+                if intel_line:
+                    lines.append(intel_line)
                 volume_line = _format_volume_spike(trade)
                 if volume_line:
                     lines.append(volume_line)
@@ -1932,6 +2016,9 @@ def format_autopilot_result(result: AutopilotResult, verbose: bool = False) -> s
                     foreign_line = _format_foreign_flow(trade)
                     if foreign_line:
                         lines.append(foreign_line)
+                    intel_line = _format_intelligence(trade)
+                    if intel_line:
+                        lines.append(intel_line)
                     volume_line = _format_volume_spike(trade)
                     if volume_line:
                         lines.append(volume_line)
@@ -1959,6 +2046,9 @@ def format_autopilot_result(result: AutopilotResult, verbose: bool = False) -> s
                     foreign_line = _format_foreign_flow(trade)
                     if foreign_line:
                         lines.append(foreign_line)
+                    intel_line = _format_intelligence(trade)
+                    if intel_line:
+                        lines.append(intel_line)
                     volume_line = _format_volume_spike(trade)
                     if volume_line:
                         lines.append(volume_line)
@@ -1986,6 +2076,9 @@ def format_autopilot_result(result: AutopilotResult, verbose: bool = False) -> s
                     foreign_line = _format_foreign_flow(trade)
                     if foreign_line:
                         lines.append(foreign_line)
+                    intel_line = _format_intelligence(trade)
+                    if intel_line:
+                        lines.append(intel_line)
                     volume_line = _format_volume_spike(trade)
                     if volume_line:
                         lines.append(volume_line)

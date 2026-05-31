@@ -6,7 +6,7 @@ Generates actionable BUY/SELL/HOLD signals based on:
 - Technical confirmations
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -60,6 +60,8 @@ class Signal:
     stop_loss_suggested: float | None
     target_suggested: float | None
     timestamp: datetime
+    confirmation_score: int = 0  # 0-4, how many confirmations passed
+    confirmation_details: list[str] = field(default_factory=list)  # which ones passed
 
     @property
     def is_actionable(self) -> bool:
@@ -94,6 +96,8 @@ class Signal:
             "target": self.target_suggested,
             "risk_reward": self.risk_reward_ratio,
             "timestamp": self.timestamp.isoformat(),
+            "confirmation_score": self.confirmation_score,
+            "confirmation_details": self.confirmation_details,
         }
 
 
@@ -136,6 +140,8 @@ class SignalGenerator:
         previous_score: float | None = None,
         momentum_score: float | None = None,
         rsi: float | None = None,
+        factor_scores=None,  # FactorScores | None
+        analysis_result=None,  # AnalysisResult | None
     ) -> Signal:
         """Generate trading signal for a stock.
 
@@ -210,6 +216,19 @@ class SignalGenerator:
             SignalType.STRONG_BUY,
         ] else None
 
+        # Calculate confirmation score from factor_scores if available
+        conf_score = 0
+        conf_details: list[str] = []
+        if factor_scores is not None:
+            conf_score, conf_details = self._calculate_confirmations(factor_scores, analysis_result)
+            if base_signal in (SignalType.BUY, SignalType.STRONG_BUY):
+                if conf_score < 2:
+                    final_confidence = max(0, final_confidence - 15)
+                    reasons_str = f"Low confirmation (only {conf_score}/4 criteria met)"
+                    logger.debug("%s: %s", symbol, reasons_str)
+                elif conf_score >= 3:
+                    final_confidence = min(95, final_confidence + 5)
+
         return Signal(
             symbol=symbol,
             signal_type=base_signal,
@@ -221,7 +240,38 @@ class SignalGenerator:
             stop_loss_suggested=stop_loss,
             target_suggested=target,
             timestamp=datetime.now(TIMEZONE),
+            confirmation_score=conf_score,
+            confirmation_details=conf_details,
         )
+
+    def _calculate_confirmations(
+        self,
+        factor_scores,  # FactorScores
+        analysis_result,  # AnalysisResult | None
+    ) -> tuple[int, list[str]]:
+        """Check 4 signal confirmation criteria. Returns (score 0-4, passed list)."""
+        passed = []
+
+        # 1. MOMENTUM: RSI not overbought (< 70) AND momentum score > 50
+        rsi = getattr(analysis_result, "rsi", None) if analysis_result else None
+        if factor_scores.momentum_score > 50:
+            if rsi is None or rsi < 70:
+                passed.append("MOMENTUM_OK")
+
+        # 2. TREND: EMA trend bullish — check via analysis_result trend field
+        trend = getattr(analysis_result, "trend", None) if analysis_result else None
+        if trend in ("BULLISH", "UPTREND") or factor_scores.momentum_score > 60:
+            passed.append("TREND_OK")
+
+        # 3. VOLUME: volume_ratio > 1.2 (above average)
+        if factor_scores.volume_ratio > 1.2:
+            passed.append("VOLUME_OK")
+
+        # 4. QUALITY: quality_score > 50 (fundamental health)
+        if factor_scores.quality_score > 50:
+            passed.append("QUALITY_OK")
+
+        return len(passed), passed
 
     def _score_to_signal(self, score: float) -> tuple[SignalType, SignalReason]:
         """Convert composite score to base signal.

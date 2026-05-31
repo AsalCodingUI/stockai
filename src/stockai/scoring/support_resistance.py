@@ -1,14 +1,42 @@
 """Support and Resistance Detection Module.
 
-Detects key price levels using pivot point analysis with scipy.signal.argrelextrema.
-Identifies nearest support/resistance and calculates distance for gate validation.
+Detects key price levels using pivot point analysis. SciPy is used when
+available, with a NumPy fallback so CLI commands still work in lean envs.
 """
 
 from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
-from scipy.signal import argrelextrema
+
+try:
+    from scipy.signal import argrelextrema as _scipy_argrelextrema
+except ModuleNotFoundError:  # pragma: no cover - exercised in runtime envs
+    _scipy_argrelextrema = None
+
+
+def _argrelextrema(values: np.ndarray, comparator, order: int) -> np.ndarray:
+    """Return local extrema indices with a SciPy-compatible fallback."""
+    if _scipy_argrelextrema is not None:
+        return _scipy_argrelextrema(values, comparator, order=order)[0]
+
+    if len(values) < (order * 2 + 1):
+        return np.array([], dtype=int)
+
+    indices: list[int] = []
+    for idx in range(order, len(values) - order):
+        center = values[idx]
+        left = values[idx - order:idx]
+        right = values[idx + 1:idx + 1 + order]
+
+        if comparator is np.greater:
+            if np.all(center > left) and np.all(center > right):
+                indices.append(idx)
+        elif comparator is np.less:
+            if np.all(center < left) and np.all(center < right):
+                indices.append(idx)
+
+    return np.array(indices, dtype=int)
 
 
 @dataclass
@@ -56,12 +84,12 @@ def find_support_resistance(
 
     # Find pivot highs (resistance candidates)
     highs = recent["high"].values
-    pivot_high_idx = argrelextrema(highs, np.greater, order=order)[0]
+    pivot_high_idx = _argrelextrema(highs, np.greater, order=order)
     resistance_candidates = [highs[i] for i in pivot_high_idx]
 
     # Find pivot lows (support candidates)
     lows = recent["low"].values
-    pivot_low_idx = argrelextrema(lows, np.less, order=order)[0]
+    pivot_low_idx = _argrelextrema(lows, np.less, order=order)
     support_candidates = [lows[i] for i in pivot_low_idx]
 
     # Filter levels within 20% of current price

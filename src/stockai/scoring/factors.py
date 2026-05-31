@@ -5,15 +5,58 @@ Implements academic factor investing approach:
 - Quality (30%): ROE, debt ratios, profit margins
 - Momentum (25%): 6-month price performance
 - Volatility (20%): Beta, standard deviation
+
+Also provides technical indicator helpers used by the rule engine:
+- calculate_mfi(): Money Flow Index (MFI14) from OHLCV data
 """
+
+from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
 import numpy as np
+import pandas as pd
 
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_mfi(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Calculate Money Flow Index (MFI) from OHLCV DataFrame.
+
+    MFI measures buying and selling pressure using both price and volume.
+    Range: 0–100.  >80 = overbought, <20 = oversold.
+    Rising MFI during pullback = healthy accumulation.
+
+    Args:
+        df:     DataFrame with columns high/High, low/Low, close/Close, volume/Volume.
+        period: Lookback period (default 14, per spec).
+
+    Returns:
+        pd.Series of MFI values aligned with df.index.
+    """
+    # Normalise column names
+    cols = {c.lower(): c for c in df.columns}
+    high = df[cols.get("high", "high")]
+    low = df[cols.get("low", "low")]
+    close = df[cols.get("close", "close")]
+    volume = df[cols.get("volume", "volume")]
+
+    typical_price = (high + low + close) / 3
+    raw_money_flow = typical_price * volume
+
+    direction = typical_price > typical_price.shift(1)
+    positive_mf = raw_money_flow.where(direction, 0.0)
+    negative_mf = raw_money_flow.where(~direction, 0.0)
+
+    pos_sum = positive_mf.rolling(period, min_periods=period).sum()
+    neg_sum = negative_mf.rolling(period, min_periods=period).sum()
+
+    # Avoid division by zero
+    mfr = pos_sum / neg_sum.replace(0.0, np.nan)
+    mfi = 100.0 - (100.0 / (1.0 + mfr))
+    return mfi.fillna(50.0)  # Neutral fallback where data insufficient
 
 # Factor weights (hedge fund style, emphasizing Quality for beginners)
 FACTOR_WEIGHTS = {
@@ -343,6 +386,8 @@ def calculate_composite_score(
         + volatility_score * w.get("volatility", 0.20)
     )
 
+    # Bonuses can total up to +33 pts (10 foreign + 15 volume + 8 sentiment).
+    # Hard cap at 100 ensures the composite score stays in a valid range.
     composite += foreign_flow_bonus + volume_bonus + sentiment_bonus
 
     return round(max(0.0, min(100.0, composite)), 1)

@@ -41,6 +41,18 @@ def gate_config_for_smv(smart_money_version: str | None) -> GateConfig:
     return GateConfig()
 
 
+def gate_config_for_rule_engine() -> GateConfig:
+    """GateConfig yang diselaraskan dengan RuleEngine thresholds."""
+    return GateConfig(
+        overall_min=65.0,        # aligned with RuleEngineConfig grade_b_min
+        technical_min=50.0,
+        smart_money_min=1.0,
+        near_support_pct=10.0,
+        adx_min=15.0,
+        fundamental_min=45.0,
+    )
+
+
 def gate_config_from_preset(
     preset: str | None,
     smart_money_version: str | None = None,
@@ -55,6 +67,8 @@ def gate_config_from_preset(
             adx_min=12.0,
             fundamental_min=50.0,
         )
+    if preset and preset.lower() == "rule_engine_v1":
+        return gate_config_for_rule_engine()
     return gate_config_for_smv(smart_money_version)
 
 

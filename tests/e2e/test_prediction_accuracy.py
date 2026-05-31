@@ -1930,9 +1930,9 @@ class TestPredictEndpointWithHistoricalAccuracy(TestPredictionAccuracyAPI):
             stock = self._create_test_stock(session, symbol="BBRI")
 
         # Mock the EnsemblePredictor and YahooFinanceSource
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo, \
-             patch("stockai.web.routes.EnsemblePredictor") as mock_predictor, \
-             patch("stockai.web.routes.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
             # Mock Yahoo to return enough data
             mock_df = MagicMock()
             mock_df.empty = False
@@ -1965,9 +1965,9 @@ class TestPredictEndpointWithHistoricalAccuracy(TestPredictionAccuracyAPI):
             self._create_test_stock(session, symbol="NEWX")
 
         # Mock the EnsemblePredictor and YahooFinanceSource
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo, \
-             patch("stockai.web.routes.EnsemblePredictor") as mock_predictor, \
-             patch("stockai.web.routes.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
             # Mock Yahoo to return enough data
             mock_df = MagicMock()
             mock_df.empty = False
@@ -2006,9 +2006,9 @@ class TestPredictEndpointWithHistoricalAccuracy(TestPredictionAccuracyAPI):
                 self._create_evaluated_prediction(session, stock, is_correct=False)
 
         # Mock the EnsemblePredictor and YahooFinanceSource
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo, \
-             patch("stockai.web.routes.EnsemblePredictor") as mock_predictor, \
-             patch("stockai.web.routes.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
             # Mock Yahoo to return enough data
             mock_df = MagicMock()
             mock_df.empty = False
@@ -2046,9 +2046,9 @@ class TestPredictEndpointWithHistoricalAccuracy(TestPredictionAccuracyAPI):
             self._create_evaluated_prediction(session, stock, direction="DOWN", is_correct=False)
 
         # Mock the EnsemblePredictor and YahooFinanceSource
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo, \
-             patch("stockai.web.routes.EnsemblePredictor") as mock_predictor, \
-             patch("stockai.web.routes.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
             # Mock Yahoo to return enough data
             mock_df = MagicMock()
             mock_df.empty = False
@@ -2087,9 +2087,9 @@ class TestPredictEndpointWithHistoricalAccuracy(TestPredictionAccuracyAPI):
             self._create_evaluated_prediction(session, stock, confidence=0.3, is_correct=False)
 
         # Mock the EnsemblePredictor and YahooFinanceSource
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo, \
-             patch("stockai.web.routes.EnsemblePredictor") as mock_predictor, \
-             patch("stockai.web.routes.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
             # Mock Yahoo to return enough data
             mock_df = MagicMock()
             mock_df.empty = False
@@ -2124,9 +2124,9 @@ class TestPredictEndpointWithHistoricalAccuracy(TestPredictionAccuracyAPI):
             self._create_test_stock(session, symbol="NOMX")
 
         # Mock the EnsemblePredictor and YahooFinanceSource
-        with patch("stockai.web.routes.YahooFinanceSource") as mock_yahoo, \
-             patch("stockai.web.routes.EnsemblePredictor") as mock_predictor, \
-             patch("stockai.web.routes.get_settings") as mock_settings:
+        with patch("stockai.web.routers.stocks.YahooFinanceSource") as mock_yahoo, \
+             patch("stockai.web.routers.stocks.EnsemblePredictor") as mock_predictor, \
+             patch("stockai.web.routers.stocks.get_settings") as mock_settings:
             # Mock Yahoo to return enough data
             mock_df = MagicMock()
             mock_df.empty = False

@@ -116,22 +116,35 @@ async def morning_scan() -> dict[str, Any]:
     result = _scan(IndexType.ALL)
     _record_scan_history("morning", result)
 
-    ready = len([s for s in result.gate_qualified_buys if (s.gates_passed or 0) >= 5])
-    watch = len(result.gate_qualified_buys)
+    regime = getattr(result, "regime", None)
+    regime_str = f"{regime.regime.value} ({regime.action_bias})" if regime else "NEUTRAL (SELECTIVE)"
+    regime_note = regime.regime_note if regime else "Data unavailable"
+
+    # Count signals by grade
+    a_plus_count = len([s for s in result.gate_qualified_buys if getattr(s, "grade", "") == "A+"])
+    a_count = len([s for s in result.gate_qualified_buys if getattr(s, "grade", "") == "A"])
+    b_count = len([s for s in result.gate_qualified_buys if getattr(s, "grade", "") == "B"])
+
     top = result.gate_qualified_buys[0] if result.gate_qualified_buys else None
 
     lines = [
         f"🌅 MORNING SCAN — {_fmt_date(now)}",
+        f"📊 Market Regime: {regime_str}",
+        f"💡 Note: {regime_note}",
         "━━━━━━━━━━━━━━━━━━━━",
-        f"📊 Scanned: {result.stocks_scanned} saham",
-        f"✅ READY: {ready} | 👀 WATCH: {watch}",
+        f"Scanned: {result.stocks_scanned} saham",
+        f"🏆 A+ Setup: {a_plus_count} | ✅ A Setup: {a_count} | 👀 B Setup: {b_count}",
         "━━━━━━━━━━━━━━━━━━━━",
     ]
     if top:
-        rr = getattr(top.analysis_result.trade_plan, "risk_reward_ratio", None) if top.analysis_result and top.analysis_result.trade_plan else None
+        grade = getattr(top, "grade", "B")
+        rr = getattr(top.layer_score.trade_plan, "risk_reward", None) if top.layer_score and top.layer_score.trade_plan else None
+        if not rr and top.analysis_result and top.analysis_result.trade_plan:
+            rr = getattr(top.analysis_result.trade_plan, "risk_reward_ratio", None)
+
         lines.extend([
-            f"👀 {top.symbol} @ Rp {top.current_price:,.0f}",
-            f"SL: {top.stop_loss or 0:.0f} | TP: {top.target or 0:.0f} | R/R: {rr:.1f}x" if rr else f"SL: {top.stop_loss or 0:.0f} | TP: {top.target or 0:.0f}",
+            f"🏆 TOP SETUP: {top.symbol} [Grade {grade}] @ Rp {top.current_price:,.0f}",
+            f"SL: Rp {top.stop_loss or 0:,.0f} | TP1: Rp {top.target or 0:,.0f} | R/R: {rr:.1f}x" if rr else f"SL: Rp {top.stop_loss or 0:,.0f} | TP1: Rp {top.target or 0:,.0f}",
             _safe_prob_line(top),
         ])
     else:
@@ -142,7 +155,7 @@ async def morning_scan() -> dict[str, Any]:
 
     result_rows = []
     for signal in result.gate_qualified_buys[:30]:
-        status = "READY" if (signal.gates_passed or 0) >= 5 else "WATCH"
+        status = signal.grade
         result_rows.append(
             {
                 "symbol": signal.symbol,
@@ -154,10 +167,15 @@ async def morning_scan() -> dict[str, Any]:
                 "sl": float(signal.stop_loss or 0) if signal.stop_loss else None,
                 "tp1": float(signal.target or 0) if signal.target else None,
                 "rr": (
-                    float(signal.analysis_result.trade_plan.risk_reward_ratio)
-                    if signal.analysis_result and signal.analysis_result.trade_plan
-                    else None
+                    float(signal.layer_score.trade_plan.risk_reward)
+                    if signal.layer_score and signal.layer_score.trade_plan
+                    else (
+                        float(signal.analysis_result.trade_plan.risk_reward_ratio)
+                        if signal.analysis_result and signal.analysis_result.trade_plan
+                        else None
+                    )
                 ),
+                "layer_score": signal.layer_score.to_dict() if signal.layer_score else None,
             }
         )
 
@@ -165,8 +183,10 @@ async def morning_scan() -> dict[str, Any]:
         "timestamp": now.isoformat(),
         "index": "ALL",
         "scanned": int(result.stocks_scanned),
-        "ready": ready,
-        "watch": watch,
+        "a_plus": a_plus_count,
+        "a": a_count,
+        "b": b_count,
+        "regime": regime.to_dict() if regime else None,
         "signals": [s.symbol for s in result.gate_qualified_buys[:20]],
         "results": result_rows,
         "message": msg,
@@ -181,6 +201,7 @@ async def morning_scan() -> dict[str, Any]:
             "scanned": int(result.stocks_scanned),
             "timestamp": now.isoformat(),
             "results": result_rows,
+            "regime": regime.to_dict() if regime else None,
         }
         web_routes._WEB_RUNTIME["last_scan_at"] = datetime.utcnow()
     except Exception:
@@ -265,3 +286,37 @@ async def weekend_summary() -> dict[str, Any]:
         lines.append(f"{i}. {row.get('kind', 'scan').upper()} — WATCH {row.get('watch', 0)} READY {row.get('ready', 0)}")
     _send_telegram("\n".join(lines))
     return {"rows": len(week_rows), "watch_total": watch_total, "ready_total": ready_total}
+
+
+async def check_journal_plans() -> dict:
+    """Every 30 min during market hours — auto-track open TradePlans.
+
+    Fetches live prices for all OPEN plans, checks TP/SL hits,
+    and sends Telegram alert for terminal outcomes.
+    """
+    from stockai.core.journal import get_journal_service
+
+    svc = get_journal_service()
+    results = svc.check_all_open_plans()
+
+    terminal = {"SL_HIT", "TP1_HIT", "TP2_HIT", "TP3_HIT"}
+    hits = [r for r in results if r["outcome"] in terminal]
+
+    if hits:
+        lines = ["📊 JOURNAL AUTO-TRACK\n━━━━━━━━━━━━━━━━━━━━"]
+        for hit in hits:
+            emoji = "✅" if "TP" in hit["outcome"] else "🛑"
+            pnl_str = f" ({hit['pnl_pct']:+.1f}%)" if hit.get("pnl_pct") is not None else ""
+            lines.append(
+                f"{emoji} {hit['symbol']} — {hit['outcome']}{pnl_str}\n"
+                f"   Harga: Rp {hit['price']:,.0f} | Plan ID: #{hit['plan_id']}"
+            )
+        lines.append("━━━━━━━━━━━━━━━━━━━━")
+        _send_telegram("\n".join(lines))
+        logger.info("Journal auto-track: %d terminal outcomes sent to Telegram", len(hits))
+
+    logger.info(
+        "Journal auto-track: checked %d open plans, %d terminal hits",
+        len(results), len(hits),
+    )
+    return {"checked": len(results), "hits": len(hits)}

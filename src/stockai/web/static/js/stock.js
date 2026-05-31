@@ -1,481 +1,172 @@
-const symbol = window.STOCK_SYMBOL;
-let mainChart = null;
-let volumeChart = null;
-let macdChart = null;
+const symbol = window.STOCK_SYMBOL || "";
 let currentPeriod = "3mo";
 let currentTujan = "swing";
-const MAIN_CHART_HEIGHT = 560;
-const SUB_CHART_HEIGHT = 140;
-window.tradePlan = null;
+let mainChart = null;
+let areaSeries = null;
+let latestScores = {};
 let chartDataCache = null;
-let latestScores = null;
-const seriesRefs = {};
-const toggleState = {
-    ema: true,
-    ma: true,
-    bb: true,
-    levels: true,
-    tradePlan: true,
-    volumePane: true,
-    volMa: true,
-    volumeSpikes: true,
-    macdPane: true,
+let activePriceLines = [];
+
+function drawChartLines(indicatorsData, tradePlanData) {
+    if (!areaSeries) return;
+    
+    // Clear old lines
+    activePriceLines.forEach(line => {
+        try {
+            areaSeries.removePriceLine(line);
+        } catch (e) {
+            console.error("Error removing price line:", e);
+        }
+    });
+    activePriceLines = [];
+    
+    const lineStyle = window.LightweightCharts ? window.LightweightCharts.LineStyle.Dashed : 2;
+    
+    // 1. Draw Support and Resistance from indicatorsData
+    if (indicatorsData?.levels) {
+        const support = Number(indicatorsData.levels.support);
+        const resistance = Number(indicatorsData.levels.resistance);
+        
+        if (support > 0) {
+            const line = areaSeries.createPriceLine({
+                price: support,
+                color: "#27272a", // zinc-800 subtle gray
+                lineWidth: 1,
+                lineStyle: lineStyle,
+                axisLabelVisible: true,
+                title: "Support",
+            });
+            activePriceLines.push(line);
+        }
+        if (resistance > 0) {
+            const line = areaSeries.createPriceLine({
+                price: resistance,
+                color: "#27272a", // zinc-800 subtle gray
+                lineWidth: 1,
+                lineStyle: lineStyle,
+                axisLabelVisible: true,
+                title: "Resistance",
+            });
+            activePriceLines.push(line);
+        }
+    }
+    
+    // 2. Draw Trade Plan levels
+    if (tradePlanData) {
+        const entryLow = Number(tradePlanData.entry_low);
+        const entryHigh = Number(tradePlanData.entry_high);
+        const stopLoss = Number(tradePlanData.stop_loss);
+        const tp1 = Number(tradePlanData.tp1);
+        const tp2 = Number(tradePlanData.tp2);
+        
+        if (entryLow > 0) {
+            const line = areaSeries.createPriceLine({
+                price: entryLow,
+                color: "#3b82f6", // blue-500
+                lineWidth: 1.5,
+                lineStyle: lineStyle,
+                axisLabelVisible: true,
+                title: entryHigh > entryLow ? "Entry Low" : "Entry",
+            });
+            activePriceLines.push(line);
+        }
+        
+        if (entryHigh > entryLow) {
+            const line = areaSeries.createPriceLine({
+                price: entryHigh,
+                color: "#3b82f6", // blue-500
+                lineWidth: 1.5,
+                lineStyle: lineStyle,
+                axisLabelVisible: true,
+                title: "Entry High",
+            });
+            activePriceLines.push(line);
+        }
+        
+        if (stopLoss > 0) {
+            const line = areaSeries.createPriceLine({
+                price: stopLoss,
+                color: "#ef4444", // red-500
+                lineWidth: 1.5,
+                lineStyle: lineStyle,
+                axisLabelVisible: true,
+                title: "Stop Loss (SL)",
+            });
+            activePriceLines.push(line);
+        }
+        
+        if (tp1 > 0) {
+            const line = areaSeries.createPriceLine({
+                price: tp1,
+                color: "#22c55e", // green-500
+                lineWidth: 1.5,
+                lineStyle: lineStyle,
+                axisLabelVisible: true,
+                title: "TP1",
+            });
+            activePriceLines.push(line);
+        }
+        
+        if (tp2 > 0) {
+            const line = areaSeries.createPriceLine({
+                price: tp2,
+                color: "#10b981", // emerald-500
+                lineWidth: 1.5,
+                lineStyle: lineStyle,
+                axisLabelVisible: true,
+                title: "TP2",
+            });
+            activePriceLines.push(line);
+        }
+    }
+}
+
+window.setTujuan = function(tujuan) {
+    currentTujan = tujuan;
+    
+    // Update button active state classes
+    const swingBtn = document.getElementById("btn-tujuan-swing");
+    const scalpBtn = document.getElementById("btn-tujuan-scalp");
+    
+    if (swingBtn && scalpBtn) {
+        if (tujuan === "swing") {
+            swingBtn.classList.add("active");
+            scalpBtn.classList.remove("active");
+        } else {
+            scalpBtn.classList.add("active");
+            swingBtn.classList.remove("active");
+        }
+    }
+    
+    loadStockDetail();
 };
 
-function destroyCharts() {
-    if (mainChart) {
-        mainChart.remove();
-        mainChart = null;
-    }
-    if (volumeChart) {
-        volumeChart.remove();
-        volumeChart = null;
-    }
-    if (macdChart) {
-        macdChart.remove();
-        macdChart = null;
-    }
-}
+window.updateParameters = function() {
+    loadStockDetail();
+};
 
-function addCandleSeriesCompat(chart, options) {
-    if (!chart) return null;
-    if (typeof chart.addCandlestickSeries === "function") {
-        return chart.addCandlestickSeries(options);
-    }
-    if (typeof chart.addSeries === "function" && window.LightweightCharts?.CandlestickSeries) {
-        return chart.addSeries(window.LightweightCharts.CandlestickSeries, options);
-    }
-    return null;
-}
 
-function addLineSeriesCompat(chart, options) {
+function addAreaSeriesCompat(chart, options) {
     if (!chart) return null;
-    if (typeof chart.addLineSeries === "function") {
-        return chart.addLineSeries(options);
-    }
-    if (typeof chart.addSeries === "function" && window.LightweightCharts?.LineSeries) {
-        return chart.addSeries(window.LightweightCharts.LineSeries, options);
-    }
-    return null;
-}
-
-function addHistogramSeriesCompat(chart, options = {}) {
-    if (!chart) return null;
-    if (typeof chart.addHistogramSeries === "function") {
-        return chart.addHistogramSeries(options);
-    }
-    if (typeof chart.addSeries === "function" && window.LightweightCharts?.HistogramSeries) {
-        return chart.addSeries(window.LightweightCharts.HistogramSeries, options);
+    if (typeof chart.addAreaSeries === "function") return chart.addAreaSeries(options);
+    if (typeof chart.addSeries === "function" && window.LightweightCharts?.AreaSeries) {
+        return chart.addSeries(window.LightweightCharts.AreaSeries, options);
     }
     return null;
 }
 
 function renderIndicatorSummary(summary, scores = null) {
-    const container = document.getElementById("indicator-summary");
-    if (!container || !summary) return;
-
-    const rsiColor = summary.rsi > 70 ? "#ff3b5c" : summary.rsi < 30 ? "#00ff88" : "#ff9500";
-    const macdColor = summary.macd_signal === "BULLISH" ? "#00ff88" : "#ff3b5c";
-    const emaColor = summary.ema_signal === "BULLISH" ? "#00ff88" : "#ff3b5c";
-    const trendColor = summary.trend === "BULLISH" ? "#00ff88" : "#ff3b5c";
-
-    const scoreBar = (label, value, color) => {
-        const safeValue = Number.isFinite(Number(value)) ? Number(value) : 0;
-        const pct = Math.min(100, Math.max(0, safeValue));
-        return `
-            <div style="margin-bottom:8px;">
-                <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
-                    <span style="font-size:11px;color:#94a3b8;">${label}</span>
-                    <span style="font-size:11px;font-weight:600;color:${color};">${pct.toFixed(0)}</span>
-                </div>
-                <div style="background:#0f172a;border-radius:4px;height:4px;">
-                    <div style="
-                        width:${pct}%;height:100%;
-                        background:${color};border-radius:4px;
-                        transition:width 0.5s;
-                    "></div>
-                </div>
-            </div>
-        `;
-    };
-
-    const scoresHtml = scores ? `
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #1e293b;">
-            <div style="font-size:11px;color:#64748b;margin-bottom:8px;">📊 COMPOSITE SCORES</div>
-            ${scoreBar("Value", scores.value_score, "#3b82f6")}
-            ${scoreBar("Quality", scores.quality_score, "#8b5cf6")}
-            ${scoreBar("Momentum", scores.momentum_score, "#00ff88")}
-            ${scoreBar("Stability", 100 - (Number(scores.volatility_score) || 0), "#fbbf24")}
-            <div style="
-                margin-top:8px;padding:8px;
-                background:#0f172a;border-radius:6px;
-                display:flex;justify-content:space-between;align-items:center;
-            ">
-                <span style="font-size:12px;color:#94a3b8;">Composite Score</span>
-                <span style="
-                    font-size:18px;font-weight:700;
-                    color:${Number(scores.composite_score) >= 65 ? "#00ff88" : Number(scores.composite_score) >= 50 ? "#fbbf24" : "#ff3b5c"};
-                ">${Number(scores.composite_score || 0).toFixed(1)}</span>
-            </div>
-        </div>
-    ` : "";
-
-    container.innerHTML = `
-        <div class="indicator-item">
-            <span class="label">RSI 14</span>
-            <span style="color:${rsiColor}">${summary.rsi} ${summary.rsi_signal}</span>
-        </div>
-        <div class="indicator-item">
-            <span class="label">MACD</span>
-            <span style="color:${macdColor}">${summary.macd_signal} ${summary.macd_cross === "GOLDEN" ? "✓" : "✗"}</span>
-        </div>
-        <div class="indicator-item">
-            <span class="label">EMA 8/21</span>
-            <span style="color:${emaColor}">${summary.ema_signal}</span>
-        </div>
-        <div class="indicator-item">
-            <span class="label">MA Signal</span>
-            <span>${summary.ma_signal}</span>
-        </div>
-        <div class="indicator-item">
-            <span class="label">MA200</span>
-            <span>${summary.ma200_signal || "N/A"}</span>
-        </div>
-        <div class="indicator-item">
-            <span class="label">Bollinger</span>
-            <span>${summary.bb_position}</span>
-        </div>
-        <div class="indicator-item">
-            <span class="label">Avg Vol</span>
-            <span>${Math.round(summary.avg_volume || 0).toLocaleString("id-ID")}</span>
-        </div>
-        <div class="indicator-item" style="border-bottom:none;">
-            <span class="label">Trend</span>
-            <span style="color:${trendColor};font-weight:700;">${summary.trend}</span>
-        </div>
-        ${scoresHtml}
-    `;
-}
-
-function renderIndicatorToggles() {
-    const root = document.getElementById("indicator-toggles");
-    if (!root) return;
-    const items = [
-        ["ema", "EMA 8/21"],
-        ["ma", "MA 50/200"],
-        ["bb", "Bollinger"],
-        ["levels", "Support/Resistance"],
-        ["tradePlan", "SL/TP"],
-        ["volumePane", "Volume Pane"],
-        ["volMa", "Vol MA20"],
-        ["volumeSpikes", "Volume Spike Glow"],
-        ["macdPane", "MACD Pane"],
-    ];
-    root.innerHTML = items.map(([key, label]) => `
-        <label class="indicator-toggle">
-            <input type="checkbox" data-toggle="${key}" ${toggleState[key] ? "checked" : ""} />
-            <span>${label}</span>
-        </label>
-    `).join("");
-
-    root.querySelectorAll("input[data-toggle]").forEach((input) => {
-        input.addEventListener("change", () => {
-            toggleState[input.dataset.toggle] = input.checked;
-            applyIndicatorToggles();
-        });
-    });
-}
-
-function setSeriesVisible(series, visible, data) {
-    if (!series) return;
-    series.setData(visible ? (data || []) : []);
-}
-
-function volumeDataWithToggle() {
-    const raw = chartDataCache?.indicators?.volume || [];
-    return raw.map((v) => ({
-        time: v.time,
-        value: v.value,
-        color: (toggleState.volumeSpikes && v.spike)
-            ? (String(v.color).includes("00ff") ? "#00ff88" : "#ff3b5c")
-            : v.color,
-    }));
-}
-
-function applyIndicatorToggles() {
-    if (!chartDataCache) return;
-
-    setSeriesVisible(seriesRefs.ema8, toggleState.ema, chartDataCache.indicators?.ema8);
-    setSeriesVisible(seriesRefs.ema21, toggleState.ema, chartDataCache.indicators?.ema21);
-    setSeriesVisible(seriesRefs.ma50, toggleState.ma, chartDataCache.indicators?.ma50);
-    setSeriesVisible(seriesRefs.ma200, toggleState.ma, chartDataCache.indicators?.ma200);
-    setSeriesVisible(seriesRefs.bbUpper, toggleState.bb, chartDataCache.indicators?.bb_upper);
-    setSeriesVisible(seriesRefs.bbMid, toggleState.bb, chartDataCache.indicators?.bb_mid);
-    setSeriesVisible(seriesRefs.bbLower, toggleState.bb, chartDataCache.indicators?.bb_lower);
-
-    setSeriesVisible(
-        seriesRefs.supportLine,
-        toggleState.levels,
-        (chartDataCache.candles || []).map((c) => ({ time: c.time, value: chartDataCache.levels?.support })),
-    );
-    setSeriesVisible(
-        seriesRefs.resistanceLine,
-        toggleState.levels,
-        (chartDataCache.candles || []).map((c) => ({ time: c.time, value: chartDataCache.levels?.resistance })),
-    );
-
-    if (toggleState.tradePlan) {
-        setHorizontalLine(seriesRefs.slLine, chartDataCache.candles || [], window.tradePlan?.stop_loss);
-        setHorizontalLine(seriesRefs.tp1Line, chartDataCache.candles || [], window.tradePlan?.tp1);
-        setHorizontalLine(seriesRefs.tp2Line, chartDataCache.candles || [], window.tradePlan?.tp2);
-        setHorizontalLine(seriesRefs.tp3Line, chartDataCache.candles || [], window.tradePlan?.tp3);
-    } else {
-        setSeriesVisible(seriesRefs.slLine, false, []);
-        setSeriesVisible(seriesRefs.tp1Line, false, []);
-        setSeriesVisible(seriesRefs.tp2Line, false, []);
-        setSeriesVisible(seriesRefs.tp3Line, false, []);
-    }
-
-    setSeriesVisible(seriesRefs.volSeries, toggleState.volumePane, volumeDataWithToggle());
-    setSeriesVisible(seriesRefs.volMaSeries, toggleState.volumePane && toggleState.volMa, chartDataCache.indicators?.vol_ma20);
-    setSeriesVisible(seriesRefs.macdHist, toggleState.macdPane, chartDataCache.indicators?.macd_hist);
-    setSeriesVisible(seriesRefs.macdLine, toggleState.macdPane, chartDataCache.indicators?.macd_line);
-    setSeriesVisible(seriesRefs.signalLine, toggleState.macdPane, chartDataCache.indicators?.signal_line);
-    setSeriesVisible(
-        seriesRefs.zeroLine,
-        toggleState.macdPane,
-        (chartDataCache.indicators?.macd_line || []).map((d) => ({ time: d.time, value: 0 })),
-    );
-
-    const volContainer = document.getElementById("volume-chart");
-    const macdContainer = document.getElementById("macd-chart");
-    if (volContainer) volContainer.style.display = toggleState.volumePane ? "block" : "none";
-    if (macdContainer) macdContainer.style.display = toggleState.macdPane ? "block" : "none";
-}
-
-function setHorizontalLine(series, candles, value) {
-    if (!series) return;
-    if (!candles?.length || !isValidPriceLevel(value, candles)) {
-        series.setData([]);
-        return;
-    }
-    const line = candles.map((c) => ({ time: c.time, value: Number(value) }));
-    series.setData(line);
-}
-
-function isValidPriceLevel(value, candles) {
-    if (value == null) return false;
-    const n = Number(value);
-    if (!Number.isFinite(n) || n <= 0) return false;
-    if (!candles?.length) return true;
-    const prices = candles.flatMap((c) => [Number(c.high), Number(c.low)]).filter((x) => Number.isFinite(x) && x > 0);
-    if (!prices.length) return true;
-    const minPrice = Math.min(...prices);
-    const maxPrice = Math.max(...prices);
-    // Ignore levels that are too far from visible price range (prevents flattening).
-    return n >= minPrice * 0.6 && n <= maxPrice * 1.4;
-}
-
-async function initAdvancedChart(period = "3mo") {
-    const mainContainer = document.getElementById("main-chart");
-    const volContainer = document.getElementById("volume-chart");
-    const macdContainer = document.getElementById("macd-chart");
-    if (!mainContainer || !volContainer || !macdContainer) return;
-    if (typeof LightweightCharts === "undefined") {
-        mainContainer.innerHTML = '<div class="text-muted" style="padding:120px;text-align:center">Chart library unavailable</div>';
-        return;
-    }
-
-    currentPeriod = period;
-    const data = await window.fetchWithTimeout(`/api/stock/${symbol}/indicators?period=${encodeURIComponent(period)}`, 35000);
-    if (!data || data.error) {
-        await renderBasicFallbackChart(period);
-        return;
-    }
-
-    destroyCharts();
-    mainContainer.innerHTML = "";
-    volContainer.innerHTML = "";
-    macdContainer.innerHTML = "";
-
-    mainChart = LightweightCharts.createChart(mainContainer, {
-        width: mainContainer.clientWidth,
-        height: MAIN_CHART_HEIGHT,
-        layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
-        grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
-        timeScale: { borderColor: "#1e1e2e", timeVisible: true },
-        rightPriceScale: {
-            borderColor: "#1e1e2e",
-            scaleMargins: { top: 0.08, bottom: 0.08 },
-        },
-    });
-
-    const candleSeries = addCandleSeriesCompat(mainChart, {
-        upColor: "#00ff88",
-        downColor: "#ff3b5c",
-        borderUpColor: "#00ff88",
-        borderDownColor: "#ff3b5c",
-        wickUpColor: "#00ff88",
-        wickDownColor: "#ff3b5c",
-    });
-    if (!candleSeries) {
-        mainContainer.innerHTML = '<div class="text-muted" style="padding:120px;text-align:center">Chart API unsupported</div>';
-        return;
-    }
-    candleSeries.setData(data.candles || []);
-    chartDataCache = data;
-    seriesRefs.candleSeries = candleSeries;
-
-    seriesRefs.ema8 = addLineSeriesCompat(mainChart, { color: "#00d4ff", lineWidth: 1, title: "EMA8" });
-    seriesRefs.ema21 = addLineSeriesCompat(mainChart, { color: "#ff9500", lineWidth: 1, title: "EMA21" });
-    seriesRefs.ma50 = addLineSeriesCompat(mainChart, { color: "#ffd60a", lineWidth: 1, lineStyle: 2, title: "MA50" });
-    seriesRefs.ma200 = addLineSeriesCompat(mainChart, { color: "#bf5af2", lineWidth: 1, lineStyle: 2, title: "MA200" });
-    seriesRefs.bbUpper = addLineSeriesCompat(mainChart, { color: "#64748b", lineWidth: 1, lineStyle: 3, title: "BB Upper" });
-    seriesRefs.bbMid = addLineSeriesCompat(mainChart, { color: "#64748b", lineWidth: 1, lineStyle: 3, title: "BB Mid" });
-    seriesRefs.bbLower = addLineSeriesCompat(mainChart, { color: "#64748b", lineWidth: 1, lineStyle: 3, title: "BB Lower" });
-
-    if (seriesRefs.ema8) seriesRefs.ema8.setData(data.indicators?.ema8 || []);
-    if (seriesRefs.ema21) seriesRefs.ema21.setData(data.indicators?.ema21 || []);
-    if (seriesRefs.ma50) seriesRefs.ma50.setData(data.indicators?.ma50 || []);
-    if (seriesRefs.ma200) seriesRefs.ma200.setData(data.indicators?.ma200 || []);
-    if (seriesRefs.bbUpper) seriesRefs.bbUpper.setData(data.indicators?.bb_upper || []);
-    if (seriesRefs.bbMid) seriesRefs.bbMid.setData(data.indicators?.bb_mid || []);
-    if (seriesRefs.bbLower) seriesRefs.bbLower.setData(data.indicators?.bb_lower || []);
-
-    seriesRefs.supportLine = addLineSeriesCompat(mainChart, { color: "#00ff8866", lineWidth: 1, lineStyle: 1, title: "Support" });
-    seriesRefs.resistanceLine = addLineSeriesCompat(mainChart, { color: "#ff3b5c66", lineWidth: 1, lineStyle: 1, title: "Resistance" });
-    setHorizontalLine(seriesRefs.supportLine, data.candles, data.levels?.support);
-    setHorizontalLine(seriesRefs.resistanceLine, data.candles, data.levels?.resistance);
-
-    seriesRefs.slLine = null;
-    seriesRefs.tp1Line = null;
-    seriesRefs.tp2Line = null;
-    seriesRefs.tp3Line = null;
-    if (window.tradePlan && data.candles?.length) {
-        seriesRefs.slLine = addLineSeriesCompat(mainChart, { color: "#ff3b5c", lineWidth: 2, lineStyle: 0, title: "SL" });
-        seriesRefs.tp1Line = addLineSeriesCompat(mainChart, { color: "#00ff8899", lineWidth: 1, lineStyle: 2, title: "TP1" });
-        seriesRefs.tp2Line = addLineSeriesCompat(mainChart, { color: "#00ff88cc", lineWidth: 1, lineStyle: 2, title: "TP2" });
-        seriesRefs.tp3Line = addLineSeriesCompat(mainChart, { color: "#00d4ff99", lineWidth: 1, lineStyle: 2, title: "TP3" });
-        setHorizontalLine(seriesRefs.slLine, data.candles, window.tradePlan.stop_loss);
-        setHorizontalLine(seriesRefs.tp1Line, data.candles, window.tradePlan.tp1);
-        setHorizontalLine(seriesRefs.tp2Line, data.candles, window.tradePlan.tp2);
-        setHorizontalLine(seriesRefs.tp3Line, data.candles, window.tradePlan.tp3);
-    }
-    mainChart.timeScale().fitContent();
-
-    volumeChart = LightweightCharts.createChart(volContainer, {
-        width: volContainer.clientWidth,
-        height: SUB_CHART_HEIGHT,
-        layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
-        grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
-        timeScale: { borderColor: "#1e1e2e", timeVisible: false },
-        rightPriceScale: { borderColor: "#1e1e2e" },
-    });
-    seriesRefs.volSeries = addHistogramSeriesCompat(volumeChart, { priceFormat: { type: "volume" } });
-    seriesRefs.volMaSeries = addLineSeriesCompat(volumeChart, { color: "#ffffff66", lineWidth: 1, title: "Vol MA20" });
-    if (seriesRefs.volSeries) {
-        seriesRefs.volSeries.setData((data.indicators?.volume || []).map((v) => ({
-            time: v.time,
-            value: v.value,
-            color: v.spike ? (String(v.color).includes("00ff") ? "#00ff88" : "#ff3b5c") : v.color,
-        })));
-    }
-    if (seriesRefs.volMaSeries) seriesRefs.volMaSeries.setData(data.indicators?.vol_ma20 || []);
-    volumeChart.timeScale().fitContent();
-
-    macdChart = LightweightCharts.createChart(macdContainer, {
-        width: macdContainer.clientWidth,
-        height: SUB_CHART_HEIGHT,
-        layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
-        grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
-        timeScale: { borderColor: "#1e1e2e", timeVisible: true },
-        rightPriceScale: { borderColor: "#1e1e2e" },
-    });
-    seriesRefs.macdHist = addHistogramSeriesCompat(macdChart);
-    seriesRefs.macdLine = addLineSeriesCompat(macdChart, { color: "#00d4ff", lineWidth: 1, title: "MACD" });
-    seriesRefs.signalLine = addLineSeriesCompat(macdChart, { color: "#ff9500", lineWidth: 1, title: "Signal" });
-    seriesRefs.zeroLine = addLineSeriesCompat(macdChart, { color: "#64748b66", lineWidth: 1, lineStyle: 1, title: "Zero" });
-
-    if (seriesRefs.macdHist) seriesRefs.macdHist.setData(data.indicators?.macd_hist || []);
-    if (seriesRefs.macdLine) seriesRefs.macdLine.setData(data.indicators?.macd_line || []);
-    if (seriesRefs.signalLine) seriesRefs.signalLine.setData(data.indicators?.signal_line || []);
-    if (seriesRefs.zeroLine && data.indicators?.macd_line) {
-        seriesRefs.zeroLine.setData(data.indicators.macd_line.map((d) => ({ time: d.time, value: 0 })));
-    }
-    macdChart.timeScale().fitContent();
-
-    if (mainChart?.timeScale && volumeChart?.timeScale && macdChart?.timeScale) {
-        mainChart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-            if (!range) return;
-            volumeChart.timeScale().setVisibleLogicalRange(range);
-            macdChart.timeScale().setVisibleLogicalRange(range);
-        });
-    }
-
-    window.requestAnimationFrame(() => {
-        if (mainChart) mainChart.applyOptions({ width: mainContainer.clientWidth });
-        if (volumeChart) volumeChart.applyOptions({ width: volContainer.clientWidth });
-        if (macdChart) macdChart.applyOptions({ width: macdContainer.clientWidth });
-    });
-
-    renderIndicatorSummary(data.summary || {}, latestScores);
-    applyIndicatorToggles();
-}
-
-async function renderBasicFallbackChart(period = "3mo") {
-    const mainContainer = document.getElementById("main-chart");
-    const volContainer = document.getElementById("volume-chart");
-    const macdContainer = document.getElementById("macd-chart");
-    if (!mainContainer || typeof LightweightCharts === "undefined") {
-        if (mainContainer) mainContainer.innerHTML = '<div class="text-muted" style="padding:120px;text-align:center">Chart unavailable</div>';
-        return;
-    }
-
-    const basic = await window.fetchWithTimeout(`/api/stock/${symbol}/chart?period=${encodeURIComponent(period)}`, 20000);
-    const summaryRoot = document.getElementById("indicator-summary");
-    if (!basic || !basic.candles?.length) {
-        mainContainer.innerHTML = '<div class="text-muted" style="padding:120px;text-align:center">Chart unavailable</div>';
-        if (volContainer) volContainer.innerHTML = "";
-        if (macdContainer) macdContainer.innerHTML = "";
-        if (summaryRoot) summaryRoot.innerHTML = '<div class="text-muted">Indicator data unavailable</div>';
-        return;
-    }
-
-    destroyCharts();
-    mainContainer.innerHTML = "";
-    if (volContainer) volContainer.style.display = "none";
-    if (macdContainer) macdContainer.style.display = "none";
-
-    mainChart = LightweightCharts.createChart(mainContainer, {
-        width: mainContainer.clientWidth,
-        height: MAIN_CHART_HEIGHT,
-        layout: { background: { color: "#111118" }, textColor: "#94a3b8" },
-        grid: { vertLines: { color: "#1e1e2e" }, horzLines: { color: "#1e1e2e" } },
-        timeScale: { borderColor: "#1e1e2e", timeVisible: true },
-        rightPriceScale: { borderColor: "#1e1e2e" },
-    });
-
-    const candleSeries = addCandleSeriesCompat(mainChart, {
-        upColor: "#00ff88",
-        downColor: "#ff3b5c",
-        borderUpColor: "#00ff88",
-        borderDownColor: "#ff3b5c",
-        wickUpColor: "#00ff88",
-        wickDownColor: "#ff3b5c",
-    });
-    if (candleSeries) candleSeries.setData(basic.candles);
-
-    const ma50 = addLineSeriesCompat(mainChart, { color: "#ffd60a", lineWidth: 1, lineStyle: 2, title: "MA50" });
-    const ma200 = addLineSeriesCompat(mainChart, { color: "#bf5af2", lineWidth: 1, lineStyle: 2, title: "MA200" });
-    if (ma50) ma50.setData(basic.ma50 || []);
-    if (ma200) ma200.setData(basic.ma200 || []);
-    mainChart.timeScale().fitContent();
-    if (summaryRoot) summaryRoot.innerHTML = '<div class="text-muted">Advanced indicators unavailable, showing basic chart.</div>';
+    // Keep internal data for compatibility, but layout is simplified in template.
 }
 
 function renderGateRows(rows) {
     return (rows || [])
-        .map((row) => `<div class="text-sm">${row.passed ? "OK" : "X"} ${row.name} ${row.value}/${row.threshold}</div>`)
+        .map((row) => `
+            <div class="flex justify-between items-center text-[11px] text-zinc-400 font-mono py-1 border-b border-zinc-900/60">
+                <span>${row.name}</span>
+                <span class="${row.passed ? 'text-success' : 'text-zinc-500'} font-bold">${row.passed ? 'PASSED' : 'WATCH'}</span>
+            </div>
+        `)
         .join("");
 }
 
@@ -486,97 +177,89 @@ function renderTradePlan(trade) {
     const fmt = (v) =>
         v != null && Number(v) !== 0
             ? `Rp ${Number(v).toLocaleString("id-ID")}`
-            : '<span style="color:#475569">—</span>';
+            : '<span class="text-zinc-600">—</span>';
 
     const fmtRR = (v) =>
         v != null && Number(v) !== 0
-            ? `<span style="color:${Number(v) >= 2 ? "#00ff88" : Number(v) >= 1.5 ? "#fbbf24" : "#ff3b5c"}">${Number(v).toFixed(2)}x</span>`
-            : '<span style="color:#475569">—</span>';
+            ? `<span class="${Number(v) >= 2 ? 'text-success' : Number(v) >= 1.5 ? 'text-warning' : 'text-error'} font-bold font-mono">${Number(v).toFixed(2)}x</span>`
+            : '<span class="text-zinc-600">—</span>';
 
     const pctFromEntry = (target, entry) => {
         const t = Number(target);
         const e = Number(entry);
         if (!Number.isFinite(t) || !Number.isFinite(e) || e <= 0) return "";
         const pct = ((t - e) / e * 100).toFixed(1);
-        const color = Number(pct) >= 0 ? "#00ff88" : "#ff3b5c";
-        return `<span style="color:${color};font-size:11px;margin-left:4px">${Number(pct) > 0 ? "+" : ""}${pct}%</span>`;
+        const colorClass = Number(pct) >= 0 ? "text-success" : "text-error";
+        return `<span class="${colorClass} text-[10px] ml-1.5 font-mono">(${Number(pct) > 0 ? "+" : ""}${pct}%)</span>`;
     };
 
     const entry = Number(plan.entry_low) > 0 ? Number(plan.entry_low) : currentPrice;
     const rows = [
         {
-            label: "📥 Entry Zone",
+            label: '<i class="ph ph-sign-in mr-1.5 align-middle text-zinc-500"></i> Area Beli (Entry)',
             value: Number(plan.entry_low) > 0 && Number(plan.entry_high) > 0
                 ? `${fmt(plan.entry_low)} – ${fmt(plan.entry_high)}`
                 : fmt(entry),
             sub: "",
         },
         {
-            label: "🛑 Stop Loss",
+            label: '<i class="ph ph-x-circle mr-1.5 align-middle text-error"></i> Stop Loss',
             value: fmt(plan.stop_loss),
             sub: pctFromEntry(plan.stop_loss, entry),
         },
         {
-            label: "🎯 TP1",
+            label: '<i class="ph ph-target mr-1.5 align-middle text-success"></i> Target 1 (TP1)',
             value: fmt(plan.tp1),
             sub: pctFromEntry(plan.tp1, entry),
         },
         {
-            label: "🎯 TP2",
+            label: '<i class="ph ph-target mr-1.5 align-middle text-success"></i> Target 2 (TP2)',
             value: fmt(plan.tp2),
             sub: pctFromEntry(plan.tp2, entry),
         },
         {
-            label: "🎯 TP3",
-            value: fmt(plan.tp3),
-            sub: pctFromEntry(plan.tp3, entry),
-        },
-        {
-            label: "⚖️ Risk/Reward",
+            label: '<i class="ph ph-scales mr-1.5 align-middle text-zinc-500"></i> Risk/Reward',
             value: fmtRR(plan.rr),
             sub: "",
         },
     ];
 
-    const rowsHtml = rows.map((r) => `
-        <div style="
-            display:flex;justify-content:space-between;align-items:center;
-            padding:8px 0;border-bottom:1px solid #1e293b;
-        ">
-            <span style="color:#94a3b8;font-size:12px;">${r.label}</span>
-            <span style="font-size:13px;font-weight:600;color:#f1f5f9;">
-                ${r.value}${r.sub || ""}
-            </span>
+    const rowsHtml = `
+        <div class="grid md:grid-cols-2 gap-x-6 gap-y-1">
+            ${rows.map((r) => `
+                <div class="flex justify-between items-center py-2 border-b border-zinc-900/60">
+                    <span class="text-zinc-400 text-xs">${r.label}</span>
+                    <span class="text-zinc-100 text-xs font-semibold">
+                        ${r.value}${r.sub || ""}
+                    </span>
+                </div>
+            `).join("")}
         </div>
-    `).join("");
+    `;
 
     const fallbackBadge = plan.is_fallback
-        ? `<div style="
-            margin-top:8px;padding:6px 10px;
-            background:#1e293b;border-radius:6px;
-            font-size:11px;color:#64748b;
-        ">
-            ⚠️ Plan dihitung dari Support/Resistance (analyzer tidak generate plan untuk saham ini)
-        </div>`
+        ? `<div class="mt-3 p-2 bg-warning/5 border border-warning/15 rounded-md text-[10px] text-warning flex items-center">
+            <i class="ph ph-warning-octagon mr-1.5 text-xs"></i> 
+            Plan dihitung otomatis berdasarkan Support & Resistance.
+           </div>`
         : "";
 
     const riskCalc = `
-        <div style="margin-top:12px;">
-            <div style="font-size:11px;color:#64748b;margin-bottom:6px;">💰 RISK CALCULATOR</div>
-            <div style="display:flex;gap:8px;align-items:center;">
+        <div class="mt-4 pt-3 border-t border-zinc-900">
+            <div class="text-[10px] text-muted mb-2 font-bold uppercase tracking-wider flex items-center">
+                <i class="ph ph-calculator mr-1 text-xs"></i> Kalkulator Modal & Lot
+            </div>
+            <div class="flex gap-3">
                 <input
                     id="modal-input"
                     type="number"
-                    placeholder="Modal (Rp)"
-                    style="
-                        flex:1;padding:6px 8px;
-                        background:#0f172a;border:1px solid #334155;
-                        border-radius:6px;color:#f1f5f9;font-size:12px;
-                    "
+                    value="5000000"
+                    placeholder="Masukkan modal (Rp)..."
+                    class="px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-50 outline-none focus:border-zinc-500 transition-colors w-44"
                     oninput="calcRisk(this.value)"
                 />
+                <div id="risk-result" class="flex-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-400 items-center"></div>
             </div>
-            <div id="risk-result" style="margin-top:6px;font-size:12px;color:#94a3b8;"></div>
         </div>
     `;
 
@@ -600,111 +283,139 @@ function renderTradePlan(trade) {
         const riskRoot = document.getElementById("risk-result");
         if (!riskRoot) return;
         riskRoot.innerHTML = `
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px;">
-                <span style="color:#64748b">Lot:</span>
-                <span style="color:#f1f5f9;font-weight:600">${lots.toLocaleString("id-ID")} lot</span>
-                <span style="color:#64748b">Lembar:</span>
-                <span style="color:#f1f5f9">${shares.toLocaleString("id-ID")} lembar</span>
-                <span style="color:#64748b">Total modal:</span>
-                <span style="color:#f1f5f9">Rp ${totalCost.toLocaleString("id-ID")}</span>
-                <span style="color:#ff3b5c">Max loss (SL):</span>
-                <span style="color:#ff3b5c;font-weight:600">-Rp ${maxLoss.toLocaleString("id-ID")}</span>
-                <span style="color:#00ff88">Profit TP1:</span>
-                <span style="color:#00ff88;font-weight:600">+Rp ${potentialTP1.toLocaleString("id-ID")}</span>
-            </div>
+            <div>Lot: <span class="text-zinc-100 font-bold font-mono">${lots.toLocaleString("id-ID")} lot</span></div>
+            <div>Modal Terpakai: <span class="text-zinc-200 font-bold font-mono">Rp ${totalCost.toLocaleString("id-ID")}</span></div>
+            <div class="text-error">Risiko (SL): <span class="font-bold font-mono">-Rp ${maxLoss.toLocaleString("id-ID")}</span></div>
+            <div class="text-success">Potensi Cuan (TP1): <span class="font-bold font-mono">+Rp ${potentialTP1.toLocaleString("id-ID")}</span></div>
         `;
     };
 
+    setTimeout(() => calcRisk("5000000"), 50);
+
+    window._tradePlan = plan;
+    drawChartLines(chartDataCache, plan);
     return rowsHtml + fallbackBadge + riskCalc;
 }
 
-function setTradePlanForChart(plan) {
-    const data = plan || {};
-    window.tradePlan = {
-        stop_loss: Number(data.stop_loss) > 0 ? Number(data.stop_loss) : null,
-        tp1: Number(data.tp1) > 0 ? Number(data.tp1) : null,
-        tp2: Number(data.tp2) > 0 ? Number(data.tp2) : null,
-        tp3: Number(data.tp3) > 0 ? Number(data.tp3) : null,
-    };
-    if (chartDataCache) applyIndicatorToggles();
+async function initAdvancedChart(period = "3mo") {
+    const mainContainer = document.getElementById("main-chart");
+    if (!mainContainer) return;
+    if (typeof LightweightCharts === "undefined") {
+        mainContainer.innerHTML = '<div class="text-muted" style="padding:120px;text-align:center">Chart library unavailable</div>';
+        return;
+    }
+
+    currentPeriod = period;
+    const data = await window.fetchWithTimeout(`/api/stock/${symbol}/indicators?period=${encodeURIComponent(period)}`, 35000);
+    if (!data || data.error || !data.candles?.length) {
+        mainContainer.innerHTML = '<div class="text-muted" style="padding:120px;text-align:center">Chart data unavailable</div>';
+        return;
+    }
+
+    mainContainer.innerHTML = "";
+
+    mainChart = LightweightCharts.createChart(mainContainer, {
+        width: mainContainer.clientWidth,
+        height: 280,
+        layout: { background: { color: "#09090b" }, textColor: "#a1a1aa" },
+        grid: { vertLines: { color: "#27272a" }, horzLines: { color: "#27272a" } },
+        timeScale: { borderColor: "#27272a", timeVisible: true },
+        rightPriceScale: {
+            borderColor: "#27272a",
+            scaleMargins: { top: 0.08, bottom: 0.08 },
+        },
+    });
+
+    areaSeries = addAreaSeriesCompat(mainChart, {
+        lineColor: "#fafafa",
+        topColor: "rgba(250, 250, 250, 0.15)",
+        bottomColor: "rgba(250, 250, 250, 0.0)",
+        lineWidth: 2,
+        title: symbol,
+    });
+
+    if (!areaSeries) {
+        mainContainer.innerHTML = '<div class="text-muted" style="padding:120px;text-align:center">Chart API unsupported</div>';
+        return;
+    }
+
+    const areaData = (data.candles || []).map(c => ({
+        time: c.time,
+        value: c.close
+    }));
+    areaSeries.setData(areaData);
+    mainChart.timeScale().fitContent();
+
+    chartDataCache = data;
+    drawChartLines(chartDataCache, window._tradePlan);
+
+    window.addEventListener("resize", () => {
+        if (mainChart && mainContainer.clientWidth > 0) {
+            mainChart.applyOptions({ width: mainContainer.clientWidth });
+        }
+    });
 }
 
 function renderMLForecast(forecast, patterns) {
     const root = document.getElementById("ml-forecast");
     if (!root) return;
     if (!forecast) {
-        root.innerHTML = '<span style="color:#475569">Data tidak tersedia</span>';
+        root.innerHTML = '<span class="text-zinc-500">Data tidak tersedia</span>';
         return;
     }
 
-    const confColor = { HIGH: "#00ff88", MEDIUM: "#fbbf24", LOW: "#ff3b5c" };
+    const confColor = { HIGH: "text-success", MEDIUM: "text-warning", LOW: "text-error" };
     const p5 = ((Number(forecast.probability_5pct) || 0) * 100).toFixed(0);
     const expected = ((Number(forecast.expected_return) || 0) * 100).toFixed(1);
     const conf = forecast.confidence || "LOW";
 
-    const patternList = (patterns || []).slice(0, 4).map((p) => {
-        if (typeof p === "string") return p;
-        return p?.name || "";
-    }).filter(Boolean);
-    const patternsHtml = patternList.length
-        ? patternList.map((p) => `
-            <span style="
-                display:inline-block;
-                padding:2px 8px;margin:2px;
-                background:#1e293b;border-radius:4px;
-                font-size:11px;color:#94a3b8;
-            ">${String(p).replaceAll("_", " ")}</span>
-        `).join("")
-        : '<span style="color:#475569;font-size:12px;">Tidak ada pola terdeteksi</span>';
-
     root.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">
-            <div style="background:#0f172a;border-radius:8px;padding:10px;text-align:center;">
-                <div style="font-size:11px;color:#64748b;margin-bottom:4px;">Prob. Naik 5%</div>
-                <div style="font-size:22px;font-weight:700;color:${Number(p5) >= 60 ? "#00ff88" : Number(p5) >= 40 ? "#fbbf24" : "#ff3b5c"};">
-                    ${p5}%
-                </div>
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3 text-center">
+                <div class="text-[10px] text-muted mb-1 font-mono">Prob. Naik 5%</div>
+                <div class="text-xl font-bold font-mono ${Number(p5) >= 60 ? 'text-success' : Number(p5) >= 40 ? 'text-warning' : 'text-error'}">${p5}%</div>
             </div>
-            <div style="background:#0f172a;border-radius:8px;padding:10px;text-align:center;">
-                <div style="font-size:11px;color:#64748b;margin-bottom:4px;">Expected Return</div>
-                <div style="font-size:22px;font-weight:700;color:${Number(expected) >= 0 ? "#00ff88" : "#ff3b5c"};">
-                    ${Number(expected) > 0 ? "+" : ""}${expected}%
-                </div>
+            <div class="bg-zinc-950 border border-zinc-800 rounded-md p-3 text-center">
+                <div class="text-[10px] text-muted mb-1 font-mono">Expected Return</div>
+                <div class="text-xl font-bold font-mono ${Number(expected) >= 0 ? 'text-success' : 'text-error'}">${Number(expected) > 0 ? "+" : ""}${expected}%</div>
             </div>
         </div>
-        <div style="
-            display:flex;justify-content:space-between;align-items:center;
-            padding:8px;background:#0f172a;border-radius:6px;margin-bottom:10px;
-        ">
-            <span style="font-size:12px;color:#94a3b8;">Confidence</span>
-            <span style="
-                font-size:12px;font-weight:700;
-                color:${confColor[conf] || "#64748b"};
-                background:${(confColor[conf] || "#64748b")}22;
-                padding:2px 10px;border-radius:4px;
-            ">${conf}</span>
+        <div class="flex justify-between items-center bg-zinc-950 border border-zinc-800 p-2.5 rounded-md text-xs font-mono">
+            <span class="text-muted">Akurasi Prediksi</span>
+            <span class="font-extrabold ${confColor[conf] || "text-muted"}">${conf}</span>
         </div>
-        <div style="font-size:11px;color:#64748b;margin-bottom:6px;">🕯️ POLA TERDETEKSI</div>
-        <div>${patternsHtml}</div>
     `;
 }
 
 async function loadScoring() {
-    const data = await window.fetchWithTimeout(
-        `/api/stock/${symbol}/scoring?tujuan=${encodeURIComponent(currentTujan)}`,
-        15000,
-    );
+    const minTp = document.getElementById("input-min-tp")?.value || "";
+    const minCl = document.getElementById("input-min-cl")?.value || "";
+    
+    let url = `/api/stock/${symbol}/scoring?tujuan=${encodeURIComponent(currentTujan)}`;
+    if (minTp) url += `&min_tp=${encodeURIComponent(minTp)}`;
+    if (minCl) url += `&min_cl=${encodeURIComponent(minCl)}`;
+
+    const data = await window.fetchWithTimeout(url, 15000);
     if (!data) {
         document.getElementById("gate-status").innerHTML = '<div class="text-muted">Scoring unavailable</div>';
         return;
     }
+    const confidence = String(data.gates?.confidence || "REJECTED").toUpperCase();
+    let gateBadgeClass = "gate-badge gate-badge-reject";
+
+    if (confidence === "HIGH") gateBadgeClass = "gate-badge gate-badge-pass";
+    else if (confidence === "WATCH") gateBadgeClass = "gate-badge gate-badge-watch";
+
+    const gateTotal = data.gates?.total || 6;
+    const gatePassed = data.gates?.passed || 0;
+
     document.getElementById("gate-status").innerHTML = `
-        <div class="text-sm">Gate: ${data.gates?.passed || 0}/${data.gates?.total || 6} (${data.gates?.confidence || "-"})</div>
-        <div class="text-sm text-muted">Composite: ${data.scores?.composite_score || 0}</div>
+        <div class="${gateBadgeClass}">${confidence}</div>
+        <div class="text-xs font-mono text-zinc-400 mt-2">Passed: ${gatePassed}/${gateTotal} Gates</div>
+        <div class="text-xs font-mono text-muted mt-0.5">Composite Score: ${Number(data.scores?.composite_score || 0).toFixed(1)}</div>
     `;
     latestScores = data.scores || latestScores;
     document.getElementById("trade-plan").innerHTML = renderTradePlan(data.trade_plan || {});
-    setTradePlanForChart(data.trade_plan || {});
 }
 
 function renderFull(data) {
@@ -713,42 +424,82 @@ function renderFull(data) {
     const forecast = data.forecast || {};
     window._currentPriceForTradePlan = Number(latest.price) || 0;
     latestScores = data.analysis || latestScores;
-    document.getElementById("stock-headline").textContent =
-        `${window.toRupiah(latest.price || 0)} | Vol ${Math.round((latest.volume || 0) / 1000000)}M`;
+
+    const priceText = window.toRupiah(latest.price || 0);
+    const volText = `${Math.round((latest.volume || 0) / 1000000)}M`;
+    document.getElementById("last-price-display").textContent = priceText;
 
     const gateRows = (data.analysis || {}).gate_status || [];
+    const gateSummary = (data.analysis || {}).gates || {};
     if (gateRows.length) {
-        document.getElementById("gate-status").innerHTML = renderGateRows(gateRows);
+        const confidence = String(gateSummary.confidence || "REJECTED").toUpperCase();
+        let gateBadgeClass = "gate-badge gate-badge-reject";
+        if (confidence === "HIGH") gateBadgeClass = "gate-badge gate-badge-pass";
+        else if (confidence === "WATCH") gateBadgeClass = "gate-badge gate-badge-watch";
+
+        const summaryHtml = `
+            <div class="${gateBadgeClass}">${confidence}</div>
+            <div class="flex justify-between items-center text-xs font-mono py-1.5 border-b border-zinc-900 mt-2 text-zinc-400">
+                <span>Gate Score</span>
+                <span class="font-bold text-zinc-200">${gateSummary.passed || 0}/${gateSummary.total || 6}</span>
+            </div>
+            <div class="flex justify-between items-center text-xs font-mono py-1.5 border-b border-zinc-900 text-zinc-400">
+                <span>Composite Score</span>
+                <span class="font-bold text-zinc-200">${Number((data.analysis || {}).composite_score || 0).toFixed(1)}</span>
+            </div>
+        `;
+        document.getElementById("gate-status").innerHTML = summaryHtml + `<div class="mt-3">${renderGateRows(gateRows)}</div>`;
     }
 
     const tradePlan = (data.analysis || {}).trade_plan || {};
     document.getElementById("trade-plan").innerHTML = renderTradePlan(tradePlan);
-    setTradePlanForChart(tradePlan);
     renderMLForecast(forecast, data.patterns || []);
-    renderIndicatorSummary(chartDataCache?.summary || {}, data.analysis || {});
 
     const patterns = data.patterns || [];
     document.getElementById("pattern-panel").innerHTML = patterns.length
-        ? patterns.slice(0, 3).map((p) => `${String(p.name || "").replaceAll("_", " ")} (${p.strength || "MEDIUM"})`).join("<br>")
-        : '<span class="text-muted">No pattern detected</span>';
+        ? `<div class="space-y-1">
+            ${patterns.slice(0, 3).map((p) => `<div class="text-xs text-zinc-300 flex justify-between"><span>${String(p.name || "").replaceAll("_", " ")}</span><span class="text-muted">${p.strength || "MEDIUM"}</span></div>`).join("")}
+           </div>`
+        : '<span class="text-zinc-500 text-xs">Tidak ada pola candlestick terdeteksi</span>';
 
     const news = data.news || [];
+    let sentimentColorClass = "text-zinc-400";
+    if (sentiment.sentiment === "BULLISH") sentimentColorClass = "text-success font-bold";
+    else if (sentiment.sentiment === "BEARISH") sentimentColorClass = "text-error font-bold";
+
     document.getElementById("sentiment-news").innerHTML = `
-        <div class="text-sm mb-2">Sentiment: ${sentiment.sentiment || "NEUTRAL"} (score: ${sentiment.score || 0})</div>
-        ${news.slice(0, 6).map((n) => `<div class="text-sm text-muted"><a class="text-link" href="${n.url || "#"}" target="_blank">${n.title}</a></div>`).join("")}
+        <div class="text-xs text-zinc-300 font-mono mb-4 border-b border-zinc-900 pb-3 flex justify-between">
+            <span>Sentimen Konsensus: <span class="${sentimentColorClass}">${sentiment.sentiment || "NEUTRAL"}</span></span>
+            <span class="text-muted">Skor: ${sentiment.score || 0}</span>
+        </div>
+        <div class="space-y-2.5">
+            ${news.slice(0, 6).map((n) => `
+                <div class="text-xs">
+                    <a class="text-zinc-200 hover:text-white hover:underline font-semibold leading-relaxed flex items-start" href="${n.url || "#"}" target="_blank">
+                        <i class="ph ph-newspaper text-sm mr-2 mt-0.5 text-muted"></i> ${n.title}
+                    </a>
+                </div>
+            `).join("")}
+        </div>
     `;
 }
 
 async function loadStockDetail() {
     const mainContainer = document.getElementById("main-chart");
     if (mainContainer) mainContainer.innerHTML = '<div class="skeleton"></div>';
-    await loadScoring();
-    await initAdvancedChart(currentPeriod);
+    
+    // Parallelize loading to prevent sequential blocking
+    loadScoring().catch(console.error);
+    initAdvancedChart(currentPeriod).catch(console.error);
 
-    window.fetchWithTimeout(
-        `/api/stock/${symbol}/full?tujuan=${encodeURIComponent(currentTujan)}`,
-        20000,
-    ).then((data) => {
+    const minTp = document.getElementById("input-min-tp")?.value || "";
+    const minCl = document.getElementById("input-min-cl")?.value || "";
+    
+    let url = `/api/stock/${symbol}/full?tujuan=${encodeURIComponent(currentTujan)}`;
+    if (minTp) url += `&min_tp=${encodeURIComponent(minTp)}`;
+    if (minCl) url += `&min_cl=${encodeURIComponent(minCl)}`;
+
+    window.fetchWithTimeout(url, 25000).then((data) => {
         if (!data) {
             document.getElementById("ml-forecast").innerHTML = '<div class="text-muted">Analysis unavailable</div>';
             return;
@@ -764,25 +515,8 @@ function activateTfButton(period) {
     });
 }
 
-function activatePlanButton(tujuan) {
-    document.querySelectorAll(".plan-btn").forEach((btn) => {
-        btn.classList.toggle("active", btn.dataset.tujuan === tujuan);
-    });
-}
-
-window.addEventListener("resize", () => {
-    const mainContainer = document.getElementById("main-chart");
-    const volContainer = document.getElementById("volume-chart");
-    const macdContainer = document.getElementById("macd-chart");
-    if (mainChart && mainContainer) mainChart.applyOptions({ width: mainContainer.clientWidth });
-    if (volumeChart && volContainer) volumeChart.applyOptions({ width: volContainer.clientWidth });
-    if (macdChart && macdContainer) macdChart.applyOptions({ width: macdContainer.clientWidth });
-});
-
 document.addEventListener("DOMContentLoaded", () => {
-    renderIndicatorToggles();
     activateTfButton(currentPeriod);
-    activatePlanButton(currentTujan);
     loadStockDetail().catch(console.error);
 
     document.querySelectorAll(".tf-btn").forEach((btn) => {
@@ -791,23 +525,6 @@ document.addEventListener("DOMContentLoaded", () => {
             currentPeriod = period;
             activateTfButton(period);
             await initAdvancedChart(period);
-        });
-    });
-
-    document.querySelectorAll(".plan-btn").forEach((btn) => {
-        btn.addEventListener("click", async () => {
-            const tujuan = btn.dataset.tujuan || "swing";
-            currentTujan = tujuan;
-            activatePlanButton(tujuan);
-            await loadScoring();
-            const full = await window.fetchWithTimeout(
-                `/api/stock/${symbol}/full?tujuan=${encodeURIComponent(currentTujan)}`,
-                20000,
-            );
-            if (full) {
-                renderFull(full);
-                await initAdvancedChart(currentPeriod);
-            }
         });
     });
 });

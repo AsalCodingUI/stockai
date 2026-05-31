@@ -45,34 +45,68 @@ window.fetchWithTimeout = async function fetchWithTimeout(url, timeout = 15000, 
 
 window.statusClass = function statusClass(status) {
     const s = String(status || "").toUpperCase();
-    if (s === "READY") return "signal-ready";
-    if (s === "WATCH") return "signal-watch";
+    if (s === "READY" || s === "A+" || s === "A") return "signal-ready";
+    if (s === "WATCH" || s === "B") return "signal-watch";
     return "signal-rejected";
 };
 
 window.renderSignalCard = function renderSignalCard(item) {
+    let statusText = item.status;
+    let badgeClass = "badge-rejected";
+    if (item.status === "A+" || item.status === "A") {
+        statusText = `GRADE ${item.status}`;
+        badgeClass = "badge-ready font-extrabold";
+    } else if (item.status === "B") {
+        statusText = "GRADE B";
+        badgeClass = "badge-watch font-extrabold";
+    } else if (item.status === "READY") {
+        statusText = "BUY SIGNAL";
+        badgeClass = "badge-ready font-extrabold";
+    } else if (item.status === "WATCH") {
+        statusText = "MONITORED";
+        badgeClass = "badge-watch font-extrabold";
+    }
+    
+    let layerBreakdown = "";
+    if (item.layer_score && item.layer_score.layers) {
+        const layers = item.layer_score.layers;
+        layerBreakdown = `
+            <div class="mt-3 pt-2.5 border-t border-zinc-800/80">
+                <div class="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold mb-1.5">Confluence Layers</div>
+                <div class="grid grid-cols-5 gap-1 text-center">
+                    <div class="px-0.5 py-0.5 rounded text-[8px] font-bold ${layers.trend.passed ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800/50 text-zinc-600'}" title="${(layers.trend.reasons || []).join('\n')}">Trend</div>
+                    <div class="px-0.5 py-0.5 rounded text-[8px] font-bold ${layers.setup.passed ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800/50 text-zinc-600'}" title="${(layers.setup.reasons || []).join('\n')}">Setup</div>
+                    <div class="px-0.5 py-0.5 rounded text-[8px] font-bold ${layers.momentum.passed ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800/50 text-zinc-600'}" title="${(layers.momentum.reasons || []).join('\n')}">Mom</div>
+                    <div class="px-0.5 py-0.5 rounded text-[8px] font-bold ${layers.volume.passed ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800/50 text-zinc-600'}" title="${(layers.volume.reasons || []).join('\n')}">Vol</div>
+                    <div class="px-0.5 py-0.5 rounded text-[8px] font-bold ${layers.fundamental.passed ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-zinc-800/50 text-zinc-600'}" title="${(layers.fundamental.reasons || []).join('\n')}">Fund</div>
+                </div>
+            </div>
+        `;
+    }
+    
     return `
         <div class="signal-card ${window.statusClass(item.status)} fade-in" data-symbol="${item.symbol}">
-            <div class="flex items-center justify-between">
-                <strong>${item.symbol}</strong>
-                <span>${item.status} ${item.gate_passed || 0}/${item.gate_total || 6}</span>
+            <div class="flex items-center justify-between mb-2">
+                <strong class="font-mono text-zinc-100">${item.symbol}</strong>
+                <span class="badge ${badgeClass}">${statusText}</span>
             </div>
-            <div class="mt-1 text-muted">${window.toRupiah(item.current_price || 0)}</div>
-            <div class="mt-2 text-sm text-muted">
-                SL: ${item.sl ? window.toRupiah(item.sl) : "-"} ·
-                TP1: ${item.tp1 ? window.toRupiah(item.tp1) : "-"} ·
-                R/R: ${item.rr ? `${item.rr}x` : "-"}
+            <div class="text-base font-bold text-zinc-200 font-mono">${window.toRupiah(item.current_price || 0)}</div>
+            <div class="mt-2 text-xs text-muted leading-relaxed">
+                Entry Mid: ~${window.toRupiah(item.current_price || 0)} ·
+                Risk/Reward: <span class="font-bold text-zinc-300 font-mono">${item.rr ? `${item.rr}x` : "-"}</span>
             </div>
-            <div class="mt-2 text-sm text-muted">
-                🔍 ${(item.smart_money || {}).signal || "NEUTRAL"} ·
-                📊 ${(item.volume || {}).classification || "NORMAL"} ·
-                💬 ${(item.sentiment || {}).label || "NEUTRAL"}
+            <div class="mt-2 text-xs text-muted flex items-center gap-1.5 flex-wrap">
+                <span class="inline-flex items-center"><i class="ph ph-magnifying-glass text-zinc-500 mr-1"></i> ${(item.smart_money || {}).signal || "NEUTRAL"}</span>
+                <span class="text-zinc-700">|</span>
+                <span class="inline-flex items-center"><i class="ph ph-chart-bar text-zinc-500 mr-1"></i> ${(item.volume || {}).classification || "NORMAL"}</span>
+                <span class="text-zinc-700">|</span>
+                <span class="inline-flex items-center"><i class="ph ph-chat-centered-text text-zinc-500 mr-1"></i> ${(item.sentiment || {}).label || "NEUTRAL"}</span>
             </div>
-            <div class="mt-2 text-sm text-muted">
-                🎯 ${Math.round(((item.probability || {}).p5 || 0) * 100)}% prob naik 5% ·
-                ${window.toPct(((item.probability || {}).expected || 0) * 100)}
+            <div class="mt-2 text-[10px] text-muted flex items-center font-mono">
+                <i class="ph ph-target mr-1 text-xs text-zinc-500"></i> ${Math.round(((item.probability || {}).p5 || 0) * 100)}% prob naik 5% · Expected: ${window.toPct(((item.probability || {}).expected || 0) * 100)}
             </div>
-            <div class="mt-2 text-link">Lihat Detail →</div>
+            ${layerBreakdown}
+            <div class="mt-3 text-xs text-link font-medium flex items-center justify-end">Lihat Detail <i class="ph ph-caret-right ml-1"></i></div>
         </div>
     `;
 };
@@ -131,8 +165,8 @@ function renderDropdown(results, query) {
     if (!searchDropdown) return;
     if (!results.length) {
         searchDropdown.innerHTML = `
-            <div style="padding:12px 16px;color:#64748b;font-size:13px;">
-                Tidak ada hasil untuk "<strong style="color:#94a3b8">${query || ""}</strong>"
+            <div style="padding:12px 16px;color:var(--color-text-muted);font-size:13px;">
+                Tidak ada hasil untuk "<strong style="color:var(--color-text-secondary)">${query || ""}</strong>"
             </div>
         `;
         showDropdown();
@@ -150,22 +184,22 @@ function renderDropdown(results, query) {
                 justify-content:space-between;
                 padding:10px 16px;
                 cursor:pointer;
-                border-bottom:1px solid #0f172a;
+                border-bottom:1px solid var(--color-border);
                 transition:background 0.1s;
             "
         >
             <div style="display:flex;align-items:center;gap:8px;">
-                <span style="font-weight:700;font-size:14px;color:#f1f5f9;min-width:52px;">
+                <span style="font-weight:700;font-size:14px;color:var(--color-text-primary);min-width:52px;font-family:var(--font-family-mono);">
                     ${highlightMatch(r.symbol, query)}
                 </span>
-                <span style="font-size:12px;color:#94a3b8;">
+                <span style="font-size:12px;color:var(--color-text-secondary);">
                     ${highlightMatch(r.name, query)}
                 </span>
             </div>
             <span style="
-                font-size:11px;color:#64748b;
-                background:#0f172a;
-                padding:2px 8px;border-radius:4px;
+                font-size:11px;color:var(--color-text-muted);
+                background:var(--color-bg-tertiary);
+                padding:2px 8px;border-radius:var(--radius-sm);
                 white-space:nowrap;
             ">${r.sector}</span>
         </div>
@@ -273,28 +307,27 @@ if (searchInput && searchDropdown) {
 const searchStyle = document.createElement("style");
 searchStyle.textContent = `
   .search-item.active {
-    background: #0f172a !important;
+    background: var(--color-bg-hover) !important;
   }
   .search-item:hover {
-    background: #0f172a !important;
+    background: var(--color-bg-hover) !important;
   }
   #global-search:focus {
-    border-color: #3b82f6 !important;
-    box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+    border-color: var(--color-border-hover) !important;
   }
   .search-item mark {
     background: transparent;
-    color: #3b82f6;
+    color: var(--color-primary) !important;
     font-weight: 700;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
   .search-kbd {
     font-size: 11px;
-    color: #475569;
-    background: #0f172a;
-    border: 1px solid #334155;
-    border-radius: 4px;
+    color: var(--color-text-muted) !important;
+    background: var(--color-bg-tertiary) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: var(--radius-sm) !important;
     padding: 1px 6px;
     font-family: monospace;
     pointer-events: none;

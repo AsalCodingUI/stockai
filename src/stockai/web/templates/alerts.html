@@ -1,14 +1,18 @@
 {% extends "base.html" %}
 
-{% block title %}Alerts - StockAI{% endblock %}
+{% block title %}Alerts Feed - StockAI{% endblock %}
 
 {% block content %}
 <section class="card">
-    <div class="flex items-center justify-between">
-        <div class="section-title">🔔 Alerts</div>
-        <button id="clear-alerts" class="btn-filter">Clear All</button>
+    <div class="flex items-center justify-between mb-5">
+        <div class="section-title" style="margin-bottom:0">
+            <i class="ph ph-bell mr-1.5 align-middle"></i> Alerts Feed
+        </div>
+        <button id="clear-alerts" class="btn-secondary" style="font-size:12px;padding:6px 16px">
+            <i class="ph ph-trash mr-1 align-middle"></i> Clear All
+        </button>
     </div>
-    <div id="alerts-list" class="mt-4 grid gap-2"></div>
+    <div id="alerts-list" class="grid gap-3"></div>
 </section>
 {% endblock %}
 
@@ -20,13 +24,38 @@ async function loadAlerts() {
     const data = await window.appFetch('/api/alerts');
     const rows = data.alerts || [];
     if (!rows.length) {
-        root.innerHTML = '<div class="text-muted">No active alerts.</div>';
+        root.innerHTML = '<div style="color:var(--color-steel);font-size:13px;padding:12px 0;font-family:var(--font-family-mono)">No active alerts.</div>';
         return;
     }
     rows.forEach((alert) => {
         const div = document.createElement('div');
         div.className = 'alert-row';
-        div.innerHTML = `<div class="font-medium">${alert.level}</div><div>${alert.title}</div><div class="text-muted">${window.timeAgo(alert.timestamp)}</div>`;
+
+        // Pill badge color by level
+        const levelConfig = {
+            'CRITICAL': { bg: 'rgba(239,68,68,0.12)', color: '#EF4444', border: 'rgba(239,68,68,0.2)' },
+            'ERROR':    { bg: 'rgba(239,68,68,0.12)', color: '#EF4444', border: 'rgba(239,68,68,0.2)' },
+            'WARNING':  { bg: 'rgba(245,158,11,0.12)', color: '#F59E0B', border: 'rgba(245,158,11,0.2)' },
+            'SUCCESS':  { bg: 'var(--miro-success-bg)', color: 'var(--miro-success)', border: 'rgba(39,166,68,0.2)' },
+        };
+        const cfg = levelConfig[alert.level] || { bg: 'var(--color-surface-soft)', color: 'var(--color-slate)', border: 'var(--color-hairline)' };
+
+        div.innerHTML = `
+            <div style="display:flex;align-items:center;gap:12px;flex:1">
+                <span style="
+                    display:inline-flex;align-items:center;
+                    padding:3px 10px;
+                    border-radius:9999px;
+                    font-size:10px;font-weight:600;
+                    background:${cfg.bg};color:${cfg.color};
+                    border:1px solid ${cfg.border};
+                    white-space:nowrap;
+                    text-transform:uppercase;
+                ">${alert.level}</span>
+                <span style="color:var(--color-ink);font-size:13px">${alert.title}</span>
+            </div>
+            <div style="color:var(--color-steel);font-family:var(--font-family-mono);font-size:11px;white-space:nowrap;margin-left:16px">${window.timeAgo(alert.timestamp)}</div>
+        `;
         root.appendChild(div);
     });
 }

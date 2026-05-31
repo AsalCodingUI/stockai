@@ -11,6 +11,7 @@ import pytz
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from stockai.core.calendar import is_trading_day
 from stockai.scheduler import jobs
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,10 @@ _scheduler: AsyncIOScheduler | None = None
 def setup_scheduler() -> AsyncIOScheduler:
     """Configure scheduler and all recurring jobs."""
     global _scheduler
+
+    if not is_trading_day():
+        logger.info("Today is not an IDX trading day — scheduler jobs will be registered but skipped by APScheduler on non-trading days.")
+
     scheduler = AsyncIOScheduler(timezone=JAKARTA_TZ)
 
     scheduler.add_job(
@@ -50,6 +55,13 @@ def setup_scheduler() -> AsyncIOScheduler:
         CronTrigger(day_of_week="sat", hour=10, minute=0, timezone=JAKARTA_TZ),
         id="weekend_summary",
         name="Weekend Summary",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        jobs.check_journal_plans,
+        CronTrigger(day_of_week="mon-fri", hour="9-16", minute="*/30", timezone=JAKARTA_TZ),
+        id="journal_autotrack",
+        name="Journal Auto-Track",
         replace_existing=True,
     )
     _scheduler = scheduler
@@ -118,6 +130,7 @@ async def run_job_now(job_id: str) -> dict[str, Any]:
         "midday_check": jobs.midday_check,
         "closing_scan": jobs.closing_scan,
         "weekend_summary": jobs.weekend_summary,
+        "journal_autotrack": jobs.check_journal_plans,
     }
     fn = mapping.get(job_id)
     if fn is None:
@@ -130,6 +143,6 @@ def run_forever() -> None:
     """Standalone scheduler loop for CLI `scheduler start`."""
     start_scheduler()
     try:
-        asyncio.get_event_loop().run_forever()
+        asyncio.new_event_loop().run_forever()
     except (KeyboardInterrupt, SystemExit):
         shutdown_scheduler(wait=False)

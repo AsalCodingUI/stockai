@@ -2,88 +2,87 @@
 {% block title %}AI Entry Coach — StockAI{% endblock %}
 
 {% block content %}
-<section class="flex items-center justify-between">
+<section class="flex items-center justify-between mb-6">
   <div>
-    <h1 class="text-2xl font-semibold">🎯 AI Entry Coach</h1>
-    <p class="text-muted">AI yang kasih tau kapan waktu terbaik untuk masuk saham</p>
+    <h1 class="text-xl font-semibold tracking-tight"><i class="ph ph-target mr-1.5 align-middle"></i> AI Entry Coach</h1>
+    <p class="text-muted text-xs mt-1">Panduan AI untuk alokasi modal dan waktu terbaik masuk saham</p>
   </div>
   <button onclick="testTelegram()"
-    class="px-4 py-2 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition">
-    📱 Test Telegram
+    class="px-3 py-1.5 text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 rounded-md transition font-medium flex items-center">
+    <i class="ph ph-paper-plane-tilt mr-1.5"></i> Test Telegram
   </button>
 </section>
 
-<section class="card mt-4">
-  <div class="section-title mb-3">+ Tambah Saham ke Watchlist</div>
-  <div class="flex flex-wrap gap-3 items-end">
+<section class="card mb-6">
+  <div class="section-title mb-4"><i class="ph ph-plus-circle mr-1.5 align-middle"></i> Tambah Saham ke Monitor List</div>
+  <div class="flex flex-wrap gap-4 items-end">
     <div>
-      <label class="text-muted text-xs">KODE SAHAM</label>
+      <label class="text-muted text-[10px] font-semibold block mb-1">KODE SAHAM</label>
       <input id="wl-symbol" type="text" placeholder="BBCA"
-        class="block mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white w-28 uppercase" />
+        class="block px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-50 w-28 uppercase outline-none focus:border-zinc-500 transition-colors" />
     </div>
     <div>
-      <label class="text-muted text-xs">MODAL (Rp)</label>
+      <label class="text-muted text-[10px] font-semibold block mb-1">MODAL (Rp)</label>
       <input id="wl-modal" type="number" value="5000000" step="500000"
-        class="block mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white w-36" />
+        class="block px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-50 w-36 outline-none focus:border-zinc-500 transition-colors" />
     </div>
     <div>
-      <label class="text-muted text-xs">TUJUAN</label>
-      <select id="wl-tujuan" class="block mt-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white">
+      <label class="text-muted text-[10px] font-semibold block mb-1">TUJUAN</label>
+      <select id="wl-tujuan" class="block px-3 py-1.5 bg-zinc-950 border border-zinc-800 rounded-md text-xs text-zinc-50 outline-none focus:border-zinc-500 transition-colors">
         <option value="scalp">Scalping (1-2 minggu)</option>
         <option value="swing" selected>Swing (1-2 bulan)</option>
         <option value="invest">Investasi (6+ bulan)</option>
       </select>
     </div>
     <button onclick="addToWatchlist()"
-      class="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold transition">
-      + Tambah
+      class="px-4 py-1.5 bg-zinc-50 hover:bg-zinc-200 text-zinc-950 rounded-md text-xs font-semibold transition flex items-center">
+      <i class="ph ph-plus mr-1"></i> Tambah
     </button>
     <button id="btn-trigger-scan" onclick="triggerScan()"
-      class="px-5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-semibold transition">
-      🔄 Scan Semua Sekarang
+      class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 rounded-md text-xs font-medium transition flex items-center">
+      <i class="ph ph-arrows-clockwise mr-1.5"></i> Scan Sekarang
     </button>
   </div>
-  <p class="text-muted text-xs mt-2">
-    Max 10 saham. Monitor otomatis setiap 8 menit saat market buka (09:00–16:15 WIB),
-    dengan konfirmasi multi-timeframe (2m/15m/1d).
-    Alert dikirim ke Telegram kalau ada sinyal masuk.
+  <p class="text-muted text-[10px] mt-3 leading-relaxed">
+    Maksimal 10 saham. Dipantau otomatis setiap 8 menit saat market buka (09:00–16:15 WIB). 
+    Notifikasi alokasi lot dan area beli akan dikirim langsung ke Telegram Anda.
   </p>
 </section>
 
-<section class="mt-4">
-  <div class="section-title mb-3">Watchlist (<span id="wl-count">0</span>/10)</div>
-  <div id="wl-grid" class="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-    <div class="text-muted text-sm">Loading...</div>
+<section class="mb-6">
+  <div class="section-title mb-4">Monitor List (<span id="wl-count" class="font-mono">0</span>/10)</div>
+  <div id="wl-grid" class="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+    <div class="text-muted text-xs font-mono">Memuat...</div>
   </div>
 </section>
 
-<section class="card mt-4">
-  <div class="flex items-center justify-between mb-3">
-    <div class="section-title">📡 Monitor Observability</div>
+<section class="card">
+  <div class="flex items-center justify-between mb-4">
+    <div class="section-title"><i class="ph ph-activity mr-1.5 align-middle"></i> Monitor Observability</div>
     <button onclick="loadMonitorLogs()"
-      class="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition">
-      Refresh Logs
+      class="px-3 py-1.5 text-xs bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 rounded-md transition font-medium flex items-center">
+      <i class="ph ph-arrows-clockwise mr-1.5"></i> Refresh Logs
     </button>
   </div>
-  <div id="monitor-status" class="text-xs text-muted mb-3">Loading monitor status...</div>
-  <div id="monitor-logs" class="text-xs text-slate-300">
+  <div id="monitor-status" class="text-xs text-muted font-mono mb-3">Loading monitor status...</div>
+  <div id="monitor-logs" class="text-xs text-zinc-300 font-mono bg-zinc-950 p-4 border border-zinc-800 rounded-md max-h-60 overflow-y-auto leading-relaxed whitespace-pre-wrap">
     Belum ada log keputusan.
   </div>
 </section>
 
-<div id="analysis-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;overflow-y:auto;padding:24px;">
-  <div style="max-width:640px;margin:0 auto;">
+<div id="analysis-modal" style="display:none;position:fixed;inset:0;background:rgba(9,9,11,0.8);backdrop-filter:blur(4px);z-index:9999;overflow-y:auto;padding:24px;">
+  <div style="max-width:640px;margin:40px auto 0;">
     <div class="card">
       <div class="flex justify-between items-center mb-4">
-        <div id="modal-title" class="text-lg font-semibold"></div>
-        <button onclick="closeAnalysis()" class="text-muted hover:text-white text-xl">✕</button>
+        <div id="modal-title" class="text-base font-semibold"></div>
+        <button onclick="closeAnalysis()" class="text-muted hover:text-white text-base"><i class="ph ph-x"></i></button>
       </div>
-      <div id="modal-body"></div>
+      <div id="modal-body" class="text-xs leading-relaxed text-zinc-300"></div>
     </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="/static/js/coach.js"></script>
+<script src="/static/js/coach.js?v=2"></script>
 {% endblock %}

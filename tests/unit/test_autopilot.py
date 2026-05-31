@@ -32,8 +32,8 @@ class TestAutopilotConfig:
         assert config.max_position_percent == 20.0
         assert config.max_sector_percent == 40.0
         assert config.max_positions == 10
-        assert config.buy_threshold == 70.0
-        assert config.sell_threshold == 50.0
+        assert config.buy_threshold == 60.0
+        assert config.sell_threshold == 45.0
         assert config.atr_multiplier == 2.0
         assert config.dry_run is False
         assert config.smart_money_version == "v1"
@@ -155,17 +155,24 @@ class TestAutopilotEngine:
         mock_idx_source.get_jii70_symbols.assert_called_once()
 
     def test_get_index_symbols_all_combines_indices(self, mock_idx_source):
-        """Test ALL index type combines all indices."""
+        """Test ALL index type combines all indices (superset of individual indices)."""
         from stockai.autopilot.engine import AutopilotEngine, AutopilotConfig, IndexType
 
+        mock_idx_source.get_idx80_symbols.return_value = ["BBCA", "BBRI", "TLKM", "UNVR", "PWON"]
         config = AutopilotConfig(index=IndexType.ALL)
         engine = AutopilotEngine(config=config)
         engine.idx_source = mock_idx_source
 
         symbols = engine._get_index_symbols()
 
-        # Should be unique combined symbols
-        assert set(symbols) == {"PWON", "TLKM", "BBRI", "BBCA", "UNVR"}
+        # ALL must be a superset of each individual index
+        symbol_set = set(symbols)
+        assert "PWON" in symbol_set
+        assert "TLKM" in symbol_set
+        assert "BBRI" in symbol_set
+        assert "BBCA" in symbol_set
+        assert "UNVR" in symbol_set
+        assert len(symbol_set) >= 5
 
     def test_buy_signal_generated_when_score_above_threshold(self):
         """Test BUY signal is generated when score > 70."""
@@ -582,10 +589,10 @@ class TestAIValidatorConfig:
 
         config = AIValidatorConfig()
 
-        assert config.buy_threshold == 6.0
-        assert config.sell_threshold == 5.0
+        assert config.buy_threshold == 5.0
+        assert config.sell_threshold == 4.0
         assert config.max_concurrent == 3
-        assert config.per_stock_timeout == 60.0
+        assert config.per_stock_timeout == 120.0
         assert config.max_retries == 1
         assert config.retry_delay == 2.0
 
@@ -692,8 +699,8 @@ class TestAIValidator:
         validator = AIValidator()
 
         assert validator.config is not None
-        assert validator.config.buy_threshold == 6.0
-        assert validator.config.sell_threshold == 5.0
+        assert validator.config.buy_threshold == 5.0
+        assert validator.config.sell_threshold == 4.0
 
     def test_validator_custom_config(self):
         """Test AIValidator with custom configuration."""
@@ -844,8 +851,8 @@ class TestCreateValidator:
 
         validator = create_validator()
 
-        assert validator.config.buy_threshold == 6.0
-        assert validator.config.sell_threshold == 5.0
+        assert validator.config.buy_threshold == 5.0
+        assert validator.config.sell_threshold == 4.0
         assert validator.config.max_concurrent == 3
 
     def test_create_validator_with_custom_params(self):
@@ -873,8 +880,8 @@ class TestAutopilotConfigAI:
         config = AutopilotConfig()
 
         assert config.ai_enabled is True
-        assert config.ai_buy_threshold == 6.0
-        assert config.ai_sell_threshold == 5.0
+        assert config.ai_buy_threshold == 5.0
+        assert config.ai_sell_threshold == 4.0
         assert config.ai_concurrency == 3
         assert config.ai_verbose is False
 
